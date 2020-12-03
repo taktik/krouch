@@ -15,30 +15,29 @@
  *     License along with this program.  If not, see
  *     <https://www.gnu.org/licenses/>.
  */
+package org.taktik.couchdb.handlers
 
-package org.taktik.couchdb.handlers;
+import com.fasterxml.jackson.databind.JsonSerializer
+import java.time.Instant
+import kotlin.Throws
+import java.io.IOException
+import com.fasterxml.jackson.core.JsonGenerator
+import com.fasterxml.jackson.databind.SerializerProvider
+import java.math.BigDecimal
 
-import com.fasterxml.jackson.core.JsonGenerator;
-import com.fasterxml.jackson.databind.JsonSerializer;
-import com.fasterxml.jackson.databind.SerializerProvider;
+class InstantSerializer : JsonSerializer<Instant?>() {
+    override fun serialize(value: Instant?, jgen: JsonGenerator, provider: SerializerProvider) = value?.let {
+        jgen.writeNumber(getBigDecimal(it))
+    } ?: jgen.writeNull()
 
-import java.io.IOException;
-import java.math.BigDecimal;
-import java.time.Instant;
+    private fun getBigDecimal(value: Instant) =
+            BigDecimal.valueOf(1000L * value.epochSecond).add(BigDecimal.valueOf(value.nano.toLong()).divide(BD_1000000))
 
-public class InstantSerializer extends JsonSerializer<Instant> {
-    private static final BigDecimal _1000000 = BigDecimal.valueOf(1000000);
-    @Override
-    public void serialize(Instant value, JsonGenerator jgen, SerializerProvider provider) throws IOException {
-        jgen.writeNumber(getBigDecimal(value));
+    override fun isEmpty(value: Instant?): Boolean {
+        return value == null
     }
 
-    protected BigDecimal getBigDecimal(Instant value) {
-        return BigDecimal.valueOf(1000l * value.getEpochSecond()).add(BigDecimal.valueOf(value.getNano()).divide(_1000000));
-    }
-
-    @Override
-    public boolean isEmpty(Instant value) {
-        return value == null;
+    companion object {
+        private val BD_1000000 = BigDecimal.valueOf(1000000)
     }
 }

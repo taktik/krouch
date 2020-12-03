@@ -15,27 +15,22 @@
  *     License along with this program.  If not, see
  *     <https://www.gnu.org/licenses/>.
  */
+package org.taktik.couchdb.handlers
 
-package org.taktik.couchdb.handlers;
+import com.fasterxml.jackson.core.JsonParser
+import com.fasterxml.jackson.databind.DeserializationContext
+import com.fasterxml.jackson.databind.JsonDeserializer
+import java.time.Instant
+import java.math.BigDecimal
 
-import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.databind.DeserializationContext;
-import com.fasterxml.jackson.databind.JsonDeserializer;
+class InstantDeserializer : JsonDeserializer<Instant>() {
+    override fun deserialize(jp: JsonParser, ctxt: DeserializationContext): Instant = getInstant(jp.decimalValue)
 
-import java.io.IOException;
-import java.math.BigDecimal;
-import java.time.Instant;
+    private fun getInstant(value: BigDecimal): Instant =
+            Instant.ofEpochSecond(value.divide(BD_1000).toLong(), value.remainder(BD_1000).multiply(BD_1000000).toLong())
 
-public class InstantDeserializer extends JsonDeserializer<Instant> {
-    private static final BigDecimal _1000000 = BigDecimal.valueOf(1000000);
-    private static final BigDecimal _1000 = BigDecimal.valueOf(1000);
-    @Override
-    public Instant deserialize(JsonParser jp, DeserializationContext ctxt) throws IOException {
-        BigDecimal val = jp.getDecimalValue();
-        return getInstant(val);
-    }
-
-    protected Instant getInstant(BigDecimal val) {
-        return Instant.ofEpochSecond(val.divide(_1000).longValue(), val.remainder(_1000).multiply(_1000000).longValue());
+    companion object {
+        private val BD_1000000 = BigDecimal.valueOf(1000000)
+        private val BD_1000 = BigDecimal.valueOf(1000)
     }
 }
