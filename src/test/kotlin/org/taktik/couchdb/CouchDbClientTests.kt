@@ -36,18 +36,17 @@ import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
-import org.springframework.http.HttpMethod
-import org.springframework.web.reactive.function.client.WebClient
+import org.taktik.net.web.HttpMethod
 import org.taktik.couchdb.dao.NameConventions
 import org.taktik.couchdb.entity.ViewQuery
+import org.taktik.couchdb.exception.CouchDbConflictException
 import org.taktik.couchdb.exception.CouchDbException
 import org.taktik.couchdb.parser.EndArray
 import org.taktik.couchdb.parser.StartArray
 import org.taktik.couchdb.parser.StartObject
 import org.taktik.couchdb.parser.split
 import org.taktik.couchdb.parser.toJsonEvents
-import org.taktik.springframework.web.reactive.getResponseBytesFlow
-import org.taktik.springframework.web.reactive.getResponseTextFlow
+import org.taktik.netty.NettyWebClient
 import java.net.URI
 import java.net.URL
 import java.nio.ByteBuffer
@@ -64,14 +63,10 @@ class CouchDbClientTests {
     private val userName = System.getProperty("icure.test.couchdb.username")
     private val password = System.getProperty("icure.test.couchdb.password")
 
-    private val httpClient: WebClient by lazy {
-        WebClient.builder().build()
-    }
-
     private val testResponseAsString = URL("https://jsonplaceholder.typicode.com/posts").openStream().use { it.readBytes().toString(StandardCharsets.UTF_8) }
-
+    private val httpClient = NettyWebClient()
     private val client = ClientImpl(
-            httpClient,
+        httpClient,
             URI("$databaseHost/$databaseName"),
             userName,
             password)
@@ -80,7 +75,7 @@ class CouchDbClientTests {
     fun testSubscribeChanges() = runBlocking {
         val testSize = 10
         val deferredChanges = async {
-            client.subscribeForChanges<Code>().take(testSize).toList()
+            client.subscribeForChanges<Code>("java_type", { if (it == "Code") Code::class.java else null }).take(testSize).toList()
         }
         // Wait a bit before updating DB
         delay(3000)
@@ -109,7 +104,7 @@ class CouchDbClientTests {
 
     @Test
     fun testRequestGetResponseBytesFlow() = runBlocking {
-        val bytesFlow = httpClient.method(HttpMethod.GET).uri("https://jsonplaceholder.typicode.com/posts").getResponseBytesFlow()
+        val bytesFlow = httpClient.uri("https://jsonplaceholder.typicode.com/posts").method(HttpMethod.GET).retrieve().toBytesFlow()
 
         val bytes = bytesFlow.fold(ByteBuffer.allocate(1000000), { acc, buffer -> acc.put(buffer) })
         bytes.flip()
@@ -119,7 +114,7 @@ class CouchDbClientTests {
 
     @Test
     fun testRequestGetText() = runBlocking {
-        val charBuffers = httpClient.method(HttpMethod.GET).uri("https://jsonplaceholder.typicode.com/posts").getResponseTextFlow()
+        val charBuffers = httpClient.uri("https://jsonplaceholder.typicode.com/posts").method(HttpMethod.GET).retrieve().toTextFlow()
         val chars = charBuffers.toList().fold(CharBuffer.allocate(1000000), { acc, buffer -> acc.put(buffer) })
         chars.flip()
         assertEquals(testResponseAsString, chars.toString())
@@ -127,7 +122,7 @@ class CouchDbClientTests {
 
     @Test
     fun testRequestGetTextAndSplit() = runBlocking {
-        val charBuffers = httpClient.method(HttpMethod.GET).uri("https://jsonplaceholder.typicode.com/posts").getResponseTextFlow()
+        val charBuffers = httpClient.uri("https://jsonplaceholder.typicode.com/posts").method(HttpMethod.GET).retrieve().toTextFlow()
         val split = charBuffers.split('\n')
         val lines = split.map { it.fold(CharBuffer.allocate(100000), { acc, buffer -> acc.put(buffer) }).flip().toString() }.toList()
         assertEquals(testResponseAsString.split("\n"), lines)
@@ -137,7 +132,7 @@ class CouchDbClientTests {
     fun testRequestGetJsonEvent() = runBlocking {
         val asyncParser = ObjectMapper().also { it.registerModule(KotlinModule()) }.createNonBlockingByteArrayParser()
 
-        val bytes = httpClient.method(HttpMethod.GET).uri("https://jsonplaceholder.typicode.com/posts").getResponseBytesFlow()
+        val bytes = httpClient.uri("https://jsonplaceholder.typicode.com/posts").method(HttpMethod.GET).retrieve().toBytesFlow()
         val jsonEvents = bytes.toJsonEvents(asyncParser).toList()
         assertEquals(StartArray, jsonEvents.first(), "Should start with StartArray")
         assertEquals(StartObject, jsonEvents[1], "jsonEvents[1] == StartObject")
@@ -229,7 +224,7 @@ class CouchDbClientTests {
 
     @Test
     fun testClientUpdateOutdated() {
-        Assertions.assertThrows(CouchDbException::class.java) {
+        Assertions.assertThrows(CouchDbConflictException::class.java) {
             runBlocking {
                 val randomCode = UUID.randomUUID().toString()
                 val toCreate = Code.from("test", randomCode, "test")
