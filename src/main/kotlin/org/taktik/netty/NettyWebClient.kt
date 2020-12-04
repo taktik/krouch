@@ -80,9 +80,8 @@ class NettyResponse(private val responseReceiver: HttpClient.ResponseReceiver<*>
                     })
                 }
             } ?: flux.map {
-                val numReadBytes = it.readableBytes()
-                val ba = ByteArray(numReadBytes)
-                it.readBytes (ba)
+                val ba = ByteArray(it.readableBytes())
+                it.readBytes(ba) //Bytes need to be read now, before they become unavailable. If we just return the nioBuffer(), we have no guarantee that the bytes will be the same when the ByteBuffer will be processed down the flux
                 ByteBuffer.wrap(ba)
             }
         }

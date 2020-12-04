@@ -673,12 +673,12 @@ class ClientImpl(private val httpClient: WebClient,
                     tb.copyFromJsonEvent(jsonEvent)
 
                     when(jsonEvent) {
-                        is FieldName -> if (level == 0 && jsonEvent.name == classDiscriminator && index + 1 < events.size) (events[index + 1] as? StringValue)?.value else type
-                        is StartArray -> null.also { level++ }
-                        is StartObject -> null.also { level++ }
-                        is EndObject -> null.also { level-- }
-                        is EndArray -> null.also { level-- }
-                        else -> null
+                        is FieldName -> if (level == 2 && jsonEvent.name == classDiscriminator && index + 1 < events.size) (events[index + 1] as? StringValue)?.value else type
+                        is StartArray -> type.also { level++ }
+                        is StartObject -> type.also { level++ }
+                        is EndObject -> type.also { level-- }
+                        is EndArray -> type.also { level-- }
+                        else -> type
                     }
                 }
                 Pair(type, tb)
