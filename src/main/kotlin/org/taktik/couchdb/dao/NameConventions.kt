@@ -17,7 +17,9 @@
 
 package org.taktik.couchdb.dao
 
-object NameConventions {
-    fun designDocName(docName: String?): String = "_design/$docName"
-    fun designDocName(klass: Class<*>) = designDocName(klass.simpleName)
+class NameConventions {
+    companion object {
+        fun designDocName(docName: String?): String = "_design/$docName"
+        fun designDocName(klass: Class<*>) = designDocName(klass.simpleName)
+    }
 }
