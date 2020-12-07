@@ -219,7 +219,6 @@ fun Flow<CharBuffer>.split(delimiter: Char): Flow<List<CharBuffer>> = flow {
 
 @ExperimentalCoroutinesApi
 fun Flow<ByteBuffer>.toJsonEvents(asyncParser: com.fasterxml.jackson.core.JsonParser): Flow<JsonEvent> {
-    val log = LogFactory.getLog("org.taktik.couchdb.parser.toJsonEvents")
     var t: JsonToken = JsonToken.NOT_AVAILABLE
     return transform { byteBuffer ->
         while (byteBuffer.hasRemaining() || t !== JsonToken.NOT_AVAILABLE) {

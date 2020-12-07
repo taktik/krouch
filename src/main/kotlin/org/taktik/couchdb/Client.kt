@@ -111,12 +111,12 @@ abstract class ViewRow<out K, out V, out T> : ViewQueryResultEvent() {
 
 data class ViewRowWithDoc<K, V, T>(override val id: String, override val key: K?, override val value: V?, override val doc: T) : ViewRow<K, V, T>()
 data class ViewRowNoDoc<K, V>(override val id: String, override val key: K?, override val value: V?) : ViewRow<K, V, Nothing>() {
-    override val doc: Nothing?
+    override val doc: Nothing
         get() = error("Row has no doc")
 }
 
 data class ViewRowWithMissingDoc<K, V>(override val id: String, override val key: K?, override val value: V?) : ViewRow<K, V, Nothing>() {
-    override val doc: Nothing?
+    override val doc: Nothing
         get() = error("Doc is missing for this row")
 }
 
@@ -256,7 +256,7 @@ class ClientImpl(private val httpClient: WebClient,
 
     override suspend fun <T : CouchDbDocument> get(id: String, clazz: Class<T>, vararg options: Option): T? {
         require(id.isNotBlank()) { "Id cannot be blank" }
-        val request = newRequest(dbURI.append(id).params(options.map { Pair<String, String>(it.paramName(), "true") }.toMap()))
+        val request = newRequest(dbURI.append(id).params(options.map { Pair(it.paramName(), "true") }.toMap()))
 
         return request.getCouchDbResponse(clazz, nullIf404 = true)
     }
@@ -264,7 +264,7 @@ class ClientImpl(private val httpClient: WebClient,
     override suspend fun <T : CouchDbDocument> get(id: String, rev: String, clazz: Class<T>, vararg options: Option): T? {
         require(id.isNotBlank()) { "Id cannot be blank" }
         require(rev.isNotBlank()) { "Rev cannot be blank" }
-        val request = newRequest(dbURI.append(id).params((listOf("rev" to rev) + options.map { Pair<String, String>(it.paramName(), "true") }).toMap()))
+        val request = newRequest(dbURI.append(id).params((listOf("rev" to rev) + options.map { Pair(it.paramName(), "true") }).toMap()))
 
         return request.getCouchDbResponse(clazz, nullIf404 = true)
     }
@@ -420,7 +420,7 @@ class ClientImpl(private val httpClient: WebClient,
 
     override suspend fun <T : CouchDbDocument> delete(entity: T): DocIdentifier {
         val id = entity.id
-        require(!id.isBlank()) { "Id cannot be blank" }
+        require(id.isNotBlank()) { "Id cannot be blank" }
         require(!entity.rev.isNullOrBlank()) { "Revision cannot be blank" }
         val uri = dbURI.append(id).param("rev", entity.rev!!)
 
@@ -638,7 +638,7 @@ class ClientImpl(private val httpClient: WebClient,
         return getCouchDbResponseWithTypeReified(request)!!
     }
 
-    private inline suspend fun <reified T> getCouchDbResponseWithTypeReified(request : Request) : T? {
+    private suspend inline fun <reified T> getCouchDbResponseWithTypeReified(request : Request) : T? {
         return request.getCouchDbResponseWithType(T::class.java, nullIf404 = true)
     }
 
@@ -688,7 +688,7 @@ class ClientImpl(private val httpClient: WebClient,
             if (className != null) {
                 val changeClass = classProvider(className)
                 if (changeClass != null && clazz.isAssignableFrom(changeClass)) {
-                    val coercedClass = changeClass as Class<T>
+                    val coercedClass = changeClass
                     val changeType = object : TypeToken<Change<T>>() {}.where(object : TypeParameter<T>() {}, coercedClass).type
                     val typeRef = object : TypeReference<Change<T>>() {
                         override fun getType(): Type {

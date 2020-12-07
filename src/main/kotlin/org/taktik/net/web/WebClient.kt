@@ -26,7 +26,6 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.reactive.asFlow
 import org.reactivestreams.Publisher
 import org.taktik.couchdb.parser.toJsonEvents
-import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
 import java.net.URI
 import java.nio.ByteBuffer
@@ -34,7 +33,7 @@ import java.nio.CharBuffer
 import java.nio.charset.Charset
 import java.nio.charset.CoderResult
 import java.nio.charset.StandardCharsets
-import java.util.*
+import java.util.Base64
 import kotlin.math.roundToInt
 
 interface WebClient {

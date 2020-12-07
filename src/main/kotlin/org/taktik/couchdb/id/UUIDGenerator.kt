@@ -17,8 +17,6 @@
 
 package org.taktik.couchdb.id
 
-import org.slf4j.Logger
-import org.slf4j.LoggerFactory
 import java.util.UUID
 
 class UUIDGenerator : IDGenerator {
@@ -30,9 +28,5 @@ class UUIDGenerator : IDGenerator {
 
     override fun newGUID(): UUID {
         return UUID.randomUUID()
-    }
-
-    companion object {
-        val log: Logger = LoggerFactory.getLogger(UUIDGenerator::class.java)
     }
 }

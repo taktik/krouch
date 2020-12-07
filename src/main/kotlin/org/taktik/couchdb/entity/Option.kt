@@ -17,7 +17,7 @@
 
 package org.taktik.couchdb.entity
 
-enum class Option(val param: String) {
+enum class Option(private val param: String) {
     CONFLICTS("conflicts"), REVISIONS_INFO("revs_info"), ATTACHMENTS("attachments");
 
     fun paramName() = param
