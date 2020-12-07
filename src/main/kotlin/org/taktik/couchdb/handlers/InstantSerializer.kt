@@ -19,8 +19,6 @@ package org.taktik.couchdb.handlers
 
 import com.fasterxml.jackson.databind.JsonSerializer
 import java.time.Instant
-import kotlin.Throws
-import java.io.IOException
 import com.fasterxml.jackson.core.JsonGenerator
 import com.fasterxml.jackson.databind.SerializerProvider
 import java.math.BigDecimal
