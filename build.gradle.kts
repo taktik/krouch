@@ -45,8 +45,12 @@ val gitVersion: String? by project
 group = "org.taktik.couchdb"
 version = gitVersion ?: "0.0.1-SNAPSHOT"
 
-java.sourceCompatibility = JavaVersion.VERSION_11
-java.targetCompatibility = JavaVersion.VERSION_11
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+
+    withSourcesJar()
+}
 
 repositories {
     mavenCentral()
@@ -74,8 +78,8 @@ dependencies {
     api("com.github.pozo:mapstruct-kotlin:1.3.1.2")
     kapt("com.github.pozo:mapstruct-kotlin-processor:1.3.1.2")
 
-    implementation(group = "com.fasterxml.jackson.module", name = "jackson-module-kotlin", version ="2.11.1")
-    implementation(group = "com.fasterxml.jackson.core", name = "jackson-databind", version ="2.11.1")
+    implementation(group = "com.fasterxml.jackson.module", name = "jackson-module-kotlin", version = "2.11.1")
+    implementation(group = "com.fasterxml.jackson.core", name = "jackson-databind", version = "2.11.1")
     implementation(group = "com.fasterxml.jackson.dataformat", name = "jackson-dataformat-smile", version = "2.11.1")
     implementation(group = "org.jetbrains.kotlin", name = "kotlin-stdlib-jdk8")
     implementation(group = "org.jetbrains.kotlin", name = "kotlin-reflect")
@@ -116,4 +120,5 @@ publishing {
             }
         }
     }
+}
 }
