@@ -638,7 +638,7 @@ class ClientImpl(private val httpClient: WebClient,
         return getCouchDbResponseWithTypeReified(request)!!
     }
 
-    private inline suspend fun <reified T> getCouchDbResponseWithTypeReified(request : Request) : T? {
+    private suspend inline fun <reified T> getCouchDbResponseWithTypeReified(request : Request) : T? {
         return request.getCouchDbResponseWithType(T::class.java, nullIf404 = true)
     }
 
