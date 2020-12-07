@@ -31,8 +31,4 @@ class UUIDGenerator : IDGenerator {
     override fun newGUID(): UUID {
         return UUID.randomUUID()
     }
-
-    companion object {
-        val log: Logger = LoggerFactory.getLogger(UUIDGenerator::class.java)
-    }
 }
