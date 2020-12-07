@@ -33,9 +33,9 @@ import java.io.FileNotFoundException
 
 /**
  *
- * @author henrik lundgren
+ * @author Antoine Duchâteau, based on of Ektrop by henrik lundgren
  */
-class StdDesignDocumentFactory : DesignDocumentFactory {
+class StdDesignDocumentFactory {
     var viewGenerator = SimpleViewGenerator()
 
     /*
@@ -43,7 +43,7 @@ class StdDesignDocumentFactory : DesignDocumentFactory {
      *
      * @see org.ektorp.support.DesignDocumentFactory#generateFrom(java.lang.Object)
      */
-    override fun generateFrom(id: String, metaDataSource: Any): DesignDocument {
+    fun generateFrom(id: String, metaDataSource: Any): DesignDocument {
         val metaDataClass: Class<*> = metaDataSource.javaClass
         return DesignDocument(
                 id = id,

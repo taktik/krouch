@@ -37,10 +37,8 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.taktik.net.web.HttpMethod
-import org.taktik.couchdb.dao.NameConventions
 import org.taktik.couchdb.entity.ViewQuery
 import org.taktik.couchdb.exception.CouchDbConflictException
-import org.taktik.couchdb.exception.CouchDbException
 import org.taktik.couchdb.parser.EndArray
 import org.taktik.couchdb.parser.StartArray
 import org.taktik.couchdb.parser.StartObject
@@ -143,7 +141,7 @@ class CouchDbClientTests {
     fun testClientQueryViewIncludeDocs() = runBlocking {
         val limit = 5
         val query = ViewQuery()
-                .designDocId(NameConventions.designDocName(Code::class.java))
+                .designDocId("_design/Code")
                 .viewName("all")
                 .limit(limit)
                 .includeDocs(true)
@@ -156,7 +154,7 @@ class CouchDbClientTests {
     fun testClientQueryViewNoDocs() = runBlocking {
         val limit = 5
         val query = ViewQuery()
-                .designDocId(NameConventions.designDocName(Code::class.java))
+                .designDocId("_design/Code")
                 .viewName("all")
                 .limit(limit)
                 .includeDocs(false)
@@ -169,7 +167,7 @@ class CouchDbClientTests {
     fun testRawClientQuery() = runBlocking {
         val limit = 5
         val query = ViewQuery()
-                .designDocId(NameConventions.designDocName(Code::class.java))
+                .designDocId("_design/Code")
                 .viewName("all")
                 .limit(limit)
                 .includeDocs(false)
@@ -266,7 +264,7 @@ class CouchDbClientTests {
     fun testClientBulkGet() = runBlocking {
         val limit = 100
         val query = ViewQuery()
-                .designDocId(NameConventions.designDocName(Code::class.java))
+                .designDocId("_design/Code")
                 .viewName("by_language_type_label")
                 .limit(limit)
                 .includeDocs(true)

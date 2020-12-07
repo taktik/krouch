@@ -15,10 +15,10 @@
  *
  */
 
-package org.taktik.couchdb.dao
+package org.taktik.couchdb.entity
 
-object NameConventions {
-    fun backReferenceViewName(fieldName: String?) = "ektorp_docrefs_${fieldName}"
-    fun designDocName(docName: String?): String = "_design/$docName"
-    fun designDocName(klass: Class<*>) = designDocName(klass.simpleName)
+enum class Option(val param: String) {
+    CONFLICTS("conflicts"), REVISIONS_INFO("revs_info"), ATTACHMENTS("attachments");
+
+    fun paramName() = param
 }

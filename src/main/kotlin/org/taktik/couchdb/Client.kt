@@ -41,7 +41,7 @@ import kotlinx.coroutines.flow.produceIn
 import org.apache.http.HttpStatus.SC_CONFLICT
 import org.apache.http.HttpStatus.SC_NOT_FOUND
 import org.slf4j.LoggerFactory
-import org.taktik.couchdb.dao.Option
+import org.taktik.couchdb.entity.Option
 import org.taktik.couchdb.entity.ActiveTask
 import org.taktik.couchdb.entity.AttachmentResult
 import org.taktik.couchdb.entity.Change

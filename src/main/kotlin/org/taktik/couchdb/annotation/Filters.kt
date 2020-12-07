@@ -17,6 +17,9 @@
 
 package org.taktik.couchdb.annotation
 
+/**
+ * @author henrik lundgren
+ */
 @Target(AnnotationTarget.FUNCTION, AnnotationTarget.PROPERTY_GETTER, AnnotationTarget.PROPERTY_SETTER, AnnotationTarget.ANNOTATION_CLASS, AnnotationTarget.CLASS)
 @Retention(AnnotationRetention.RUNTIME)
 annotation class Filters(vararg val value: Filter)

@@ -26,6 +26,10 @@ import org.taktik.couchdb.util.ReflectionUtils
 import java.io.FileNotFoundException
 import java.util.HashMap
 
+/**
+ *
+ * @author Antoine Duchâteau, based on of Ektrop by henrik lundgren
+ */
 class SimpleViewGenerator {
 
     fun generateViews(
@@ -71,7 +75,7 @@ class SimpleViewGenerator {
         }
     }
 
-    fun shouldLoadFunctionFromClassPath(function: String?): Boolean {
+    private fun shouldLoadFunctionFromClassPath(function: String?): Boolean {
         return function != null && function.startsWith("classpath:")
     }
 
