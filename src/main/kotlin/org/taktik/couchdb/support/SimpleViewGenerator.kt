@@ -22,7 +22,7 @@ import org.taktik.couchdb.annotation.View
 import org.taktik.couchdb.annotation.Views
 import org.taktik.couchdb.util.Exceptions
 import org.taktik.couchdb.util.Predicate
-import org.taktik.couchdb.util.ReflectionUtils
+import org.taktik.couchdb.util.eachAnnotation
 import java.io.FileNotFoundException
 import java.util.HashMap
 
@@ -42,7 +42,7 @@ class SimpleViewGenerator {
     }
 
     private fun createDeclaredViews(views: MutableMap<String, org.taktik.couchdb.entity.View>, klass: Class<*>) {
-        ReflectionUtils.eachAnnotation(klass, Views::class.java, object : Predicate<Views> {
+        eachAnnotation(klass, Views::class.java, object : Predicate<Views> {
             override fun apply(input: Views): Boolean {
                 for (v in input.value) {
                     addView(views, v, klass)
@@ -51,7 +51,7 @@ class SimpleViewGenerator {
             }
         })
 
-        ReflectionUtils.eachAnnotation(klass, View::class.java, object : Predicate<View> {
+        eachAnnotation(klass, View::class.java, object : Predicate<View> {
             override fun apply(input: View): Boolean {
                 addView(views, input, klass)
                 return true

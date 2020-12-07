@@ -28,7 +28,7 @@ import org.taktik.couchdb.entity.DesignDocument
 import org.taktik.couchdb.util.Assert
 import org.taktik.couchdb.util.Exceptions
 import org.taktik.couchdb.util.Predicate
-import org.taktik.couchdb.util.ReflectionUtils
+import org.taktik.couchdb.util.eachAnnotation
 import java.io.FileNotFoundException
 
 /**
@@ -58,7 +58,7 @@ class StdDesignDocumentFactory {
     private fun createFilterFunctions(metaDataClass: Class<*>): Map<String, String> {
         val shows: MutableMap<String, String> = HashMap()
 
-        ReflectionUtils.eachAnnotation(metaDataClass, Filter::class.java, object : Predicate<Filter> {
+        eachAnnotation(metaDataClass, Filter::class.java, object : Predicate<Filter> {
             override fun apply(input: Filter): Boolean {
                 shows[input.name] = resolveFilterFunction(input, metaDataClass)
                 return true
@@ -66,7 +66,7 @@ class StdDesignDocumentFactory {
         })
 
 
-        ReflectionUtils.eachAnnotation(metaDataClass, Filters::class.java, object : Predicate<Filters> {
+        eachAnnotation(metaDataClass, Filters::class.java, object : Predicate<Filters> {
             override fun apply(input: Filters): Boolean {
                 for (sf in input.value) {
                     shows[sf.name] = resolveFilterFunction(sf, metaDataClass)
@@ -81,14 +81,14 @@ class StdDesignDocumentFactory {
     private fun createUpdateHandlerFunctions(metaDataClass: Class<*>): Map<String, String> {
         val updateHandlers: MutableMap<String, String> = HashMap()
 
-        ReflectionUtils.eachAnnotation(metaDataClass, UpdateHandler::class.java, object : Predicate<UpdateHandler> {
+        eachAnnotation(metaDataClass, UpdateHandler::class.java, object : Predicate<UpdateHandler> {
             override fun apply(input: UpdateHandler): Boolean {
                 updateHandlers[input.name] = resolveUpdateHandlerFunction(input, metaDataClass)
                 return true
             }
         })
 
-        ReflectionUtils.eachAnnotation(metaDataClass, UpdateHandlers::class.java, object : Predicate<UpdateHandlers> {
+        eachAnnotation(metaDataClass, UpdateHandlers::class.java, object : Predicate<UpdateHandlers> {
             override fun apply(input: UpdateHandlers): Boolean {
                 for (sf in input.value) {
                     updateHandlers[sf.name] = resolveUpdateHandlerFunction(sf, metaDataClass)
@@ -103,14 +103,14 @@ class StdDesignDocumentFactory {
     private fun createShowFunctions(metaDataClass: Class<*>): Map<String, String> {
         val shows: MutableMap<String, String> = HashMap()
 
-        ReflectionUtils.eachAnnotation(metaDataClass, ShowFunction::class.java, object : Predicate<ShowFunction> {
+        eachAnnotation(metaDataClass, ShowFunction::class.java, object : Predicate<ShowFunction> {
             override fun apply(input: ShowFunction): Boolean {
                 shows[input.name] = resolveShowFunction(input, metaDataClass)
                 return true
             }
         })
 
-        ReflectionUtils.eachAnnotation(metaDataClass, Shows::class.java, object : Predicate<Shows> {
+        eachAnnotation(metaDataClass, Shows::class.java, object : Predicate<Shows> {
             override fun apply(input: Shows): Boolean {
                 for (sf in input.value) {
                     shows[sf.name] = resolveShowFunction(sf, metaDataClass)
@@ -125,14 +125,14 @@ class StdDesignDocumentFactory {
     private fun createListFunctions(metaDataClass: Class<*>): Map<String, String> {
         val lists: MutableMap<String, String> = HashMap()
 
-        ReflectionUtils.eachAnnotation(metaDataClass, ListFunction::class.java, object : Predicate<ListFunction> {
+        eachAnnotation(metaDataClass, ListFunction::class.java, object : Predicate<ListFunction> {
             override fun apply(input: ListFunction): Boolean {
                 lists[input.name] = resolveListFunction(input, metaDataClass)
                 return true
             }
         })
 
-        ReflectionUtils.eachAnnotation(metaDataClass, Lists::class.java, object : Predicate<Lists> {
+        eachAnnotation(metaDataClass, Lists::class.java, object : Predicate<Lists> {
             override fun apply(input: Lists): Boolean {
                 for (lf in input.value) {
                     lists[lf.name] = resolveListFunction(lf, metaDataClass)
