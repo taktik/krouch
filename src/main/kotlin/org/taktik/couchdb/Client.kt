@@ -688,7 +688,7 @@ class ClientImpl(private val httpClient: WebClient,
             if (className != null) {
                 val changeClass = classProvider(className)
                 if (changeClass != null && clazz.isAssignableFrom(changeClass)) {
-                    val coercedClass = changeClass as Class<T>
+                    val coercedClass = changeClass
                     val changeType = object : TypeToken<Change<T>>() {}.where(object : TypeParameter<T>() {}, coercedClass).type
                     val typeRef = object : TypeReference<Change<T>>() {
                         override fun getType(): Type {
