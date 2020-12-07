@@ -93,6 +93,7 @@ dependencies {
     implementation(group = "com.google.guava", name = "guava", version = "30.0-jre")
     implementation(group = "org.apache.httpcomponents", name = "httpclient", version = "4.5.13")
     implementation(group = "io.projectreactor", name = "reactor-core", version = "3.4.0")
+    implementation(group = "io.projectreactor.netty", name = "reactor-netty", version = "1.0.1")
 
     testImplementation(group = "org.junit.jupiter", name = "junit-jupiter", version = "5.4.2")
 }
