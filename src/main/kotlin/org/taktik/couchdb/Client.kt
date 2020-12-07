@@ -420,7 +420,7 @@ class ClientImpl(private val httpClient: WebClient,
 
     override suspend fun <T : CouchDbDocument> delete(entity: T): DocIdentifier {
         val id = entity.id
-        require(!id.isBlank()) { "Id cannot be blank" }
+        require(id.isNotBlank()) { "Id cannot be blank" }
         require(!entity.rev.isNullOrBlank()) { "Revision cannot be blank" }
         val uri = dbURI.append(id).param("rev", entity.rev!!)
 
