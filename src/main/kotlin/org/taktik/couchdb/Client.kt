@@ -111,12 +111,12 @@ abstract class ViewRow<out K, out V, out T> : ViewQueryResultEvent() {
 
 data class ViewRowWithDoc<K, V, T>(override val id: String, override val key: K?, override val value: V?, override val doc: T) : ViewRow<K, V, T>()
 data class ViewRowNoDoc<K, V>(override val id: String, override val key: K?, override val value: V?) : ViewRow<K, V, Nothing>() {
-    override val doc: Nothing?
+    override val doc: Nothing
         get() = error("Row has no doc")
 }
 
 data class ViewRowWithMissingDoc<K, V>(override val id: String, override val key: K?, override val value: V?) : ViewRow<K, V, Nothing>() {
-    override val doc: Nothing?
+    override val doc: Nothing
         get() = error("Doc is missing for this row")
 }
 
