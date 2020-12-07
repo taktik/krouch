@@ -60,9 +60,9 @@ interface Request {
 }
 
 interface Response {
-    fun toFlux(): Flux<ByteBuffer>
+    fun toFlux(): Publisher<ByteBuffer>
     fun toFlow() = toFlux().asFlow()
-    fun onStatus(status: Int, handler: (ResponseStatus) -> Publisher<ByteBuffer>): Response
+    fun onStatus(status: Int, handler: (ResponseStatus) -> Mono<out Throwable>): Response
 
     /**
     Execute this WebClient [WebClient.RequestHeadersSpec] and get the response as a [Flow] of [ByteBuffer].
