@@ -48,6 +48,7 @@ class DocumentNotFoundException : DbAccessException {
 
     val isDocumentDeleted: Boolean
         get() = checkReason("deleted")
+
     val isDatabaseDeleted: Boolean
         get() = checkReason("no_db_file")
 }
