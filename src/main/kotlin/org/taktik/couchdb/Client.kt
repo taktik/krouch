@@ -256,7 +256,7 @@ class ClientImpl(private val httpClient: WebClient,
 
     override suspend fun <T : CouchDbDocument> get(id: String, clazz: Class<T>, vararg options: Option): T? {
         require(id.isNotBlank()) { "Id cannot be blank" }
-        val request = newRequest(dbURI.append(id).params(options.map { Pair<String, String>(it.paramName(), "true") }.toMap()))
+        val request = newRequest(dbURI.append(id).params(options.map { Pair(it.paramName(), "true") }.toMap()))
 
         return request.getCouchDbResponse(clazz, nullIf404 = true)
     }
@@ -264,7 +264,7 @@ class ClientImpl(private val httpClient: WebClient,
     override suspend fun <T : CouchDbDocument> get(id: String, rev: String, clazz: Class<T>, vararg options: Option): T? {
         require(id.isNotBlank()) { "Id cannot be blank" }
         require(rev.isNotBlank()) { "Rev cannot be blank" }
-        val request = newRequest(dbURI.append(id).params((listOf("rev" to rev) + options.map { Pair<String, String>(it.paramName(), "true") }).toMap()))
+        val request = newRequest(dbURI.append(id).params((listOf("rev" to rev) + options.map { Pair(it.paramName(), "true") }).toMap()))
 
         return request.getCouchDbResponse(clazz, nullIf404 = true)
     }
