@@ -30,7 +30,6 @@ import org.taktik.net.web.Request
 import org.taktik.net.web.Response
 import org.taktik.net.web.ResponseStatus
 import org.taktik.net.web.WebClient
-import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
 import reactor.netty.http.client.HttpClient
 import java.net.URI
