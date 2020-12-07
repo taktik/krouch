@@ -19,7 +19,7 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 val repoUsername: String by project
 val repoPassword: String by project
-val mavenRepository: String by project
+val mavenReleasesRepository: String by project
 
 plugins {
     kotlin("jvm") version "1.4.10"
@@ -109,7 +109,7 @@ publishing {
     repositories {
         maven {
             name = "Taktik"
-            url = uri(mavenRepository)
+            url = uri(mavenReleasesRepository)
             credentials {
                 username = repoUsername
                 password = repoPassword
