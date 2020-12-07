@@ -50,7 +50,7 @@ import java.net.URL
 import java.nio.ByteBuffer
 import java.nio.CharBuffer
 import java.nio.charset.StandardCharsets
-import java.util.*
+import java.util.UUID
 
 @FlowPreview
 @ExperimentalCoroutinesApi

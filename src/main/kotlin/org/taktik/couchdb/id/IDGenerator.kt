@@ -17,7 +17,7 @@
 
 package org.taktik.couchdb.id
 
-import java.util.*
+import java.util.UUID
 
 interface IDGenerator {
     fun incrementAndGet(sequenceName: String): Int

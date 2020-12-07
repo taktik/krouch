@@ -25,7 +25,7 @@ import java.util.*
 
 /**
  * Class for creating complex keys for view queries.
- * The keys's components can consists of any JSON-encodeable objects, but are most likely to be Strings and Integers.
+ * The keys's components can consists of any JSON-encodable objects, but are most likely to be Strings and Integers.
  * @author henrik lundgren
  */
 @JsonDeserialize(using = JacksonComplexKeyDeserializer::class)
@@ -33,10 +33,10 @@ import java.util.*
 class ComplexKey(components: Array<Any?> = arrayOf()) {
     val components: List<Any?> = listOf(*components)
 
-    override fun equals(o: Any?): Boolean {
-        if (this === o) return true
-        if (o == null || javaClass != o.javaClass) return false
-        val that = o as ComplexKey
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other == null || javaClass != other.javaClass) return false
+        val that = other as ComplexKey
         return components == that.components
     }
 
@@ -70,5 +70,4 @@ class ComplexKey(components: Array<Any?> = arrayOf()) {
             return EMPTY_ARRAY
         }
     }
-
 }
