@@ -98,3 +98,22 @@ dependencies {
 
     testImplementation(group = "org.junit.jupiter", name = "junit-jupiter", version = "5.4.2")
 }
+
+publishing {
+    publications {
+        create<MavenPublication>("krouch") {
+            from(components["java"])
+        }
+    }
+
+    repositories {
+        maven {
+            name = "Taktik"
+            url = uri(mavenRepository)
+            credentials {
+                username = repoUsername
+                password = repoPassword
+            }
+        }
+    }
+}
