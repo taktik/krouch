@@ -27,9 +27,8 @@ import org.taktik.couchdb.entity.Attachment
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)
 @KotlinBuilder
-@View(name = "all", map = "function(doc) { if (doc.java_type == 'Code' && !doc.deleted) emit( null, doc._id )}")
 @Views(View(name = "all", map = "function(doc) { if (doc.java_type == 'Code' && !doc.deleted) emit( null, doc._id )}"),
-       View(name = "by_language_type_label", map = "function(doc) { if (doc.java_type == 'Code' && !doc.deleted) emit( null, doc._id )}"))
+       View(name = "by_type", map = "function(doc) { if (doc.java_type == 'Code' && !doc.deleted) emit([doc.type], 1)}"))
 data class Code(
         @JsonProperty("_id") override val id: String,         // id = type|code|version  => this must be unique
         @JsonProperty("_rev") override val rev: String? = null,

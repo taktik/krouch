@@ -44,6 +44,7 @@ import org.taktik.couchdb.parser.StartArray
 import org.taktik.couchdb.parser.StartObject
 import org.taktik.couchdb.parser.split
 import org.taktik.couchdb.parser.toJsonEvents
+import org.taktik.couchdb.support.StdDesignDocumentFactory
 import org.taktik.netty.NettyWebClient
 import java.net.URI
 import java.net.URL
@@ -68,6 +69,14 @@ class CouchDbClientTests {
             URI("$databaseHost/$databaseName"),
             userName,
             password)
+
+    init {
+        //  Initialize required database objects
+        runBlocking {
+            val codeDesignDocument = StdDesignDocumentFactory().generateFrom("_design/Code", Code.from("test", UUID.randomUUID().toString(), "test"))
+            client.createOrUpdateDesignDocument(codeDesignDocument, true)
+        }
+    }
 
     @Test
     fun testSubscribeChanges() = runBlocking {
@@ -265,7 +274,7 @@ class CouchDbClientTests {
         val limit = 100
         val query = ViewQuery()
                 .designDocId("_design/Code")
-                .viewName("by_language_type_label")
+                .viewName("by_type")
                 .limit(limit)
                 .includeDocs(true)
         val flow = client.queryViewIncludeDocs<List<*>, Int, Code>(query)

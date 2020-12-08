@@ -45,6 +45,7 @@ import org.taktik.couchdb.entity.Option
 import org.taktik.couchdb.entity.ActiveTask
 import org.taktik.couchdb.entity.AttachmentResult
 import org.taktik.couchdb.entity.Change
+import org.taktik.couchdb.entity.DesignDocument
 import org.taktik.couchdb.exception.CouchDbException
 import org.taktik.couchdb.entity.ViewQuery
 import org.taktik.couchdb.exception.ViewResultException
@@ -171,6 +172,9 @@ interface Client {
     // Check if db exists
     suspend fun exists(): Boolean
 
+    //  Create or update a designDocument
+    suspend fun createOrUpdateDesignDocument(designDocument: DesignDocument, updateIfExists: Boolean) : DesignDocument
+
     // CRUD methods
     suspend fun <T : CouchDbDocument> get(id: String, clazz: Class<T>, vararg options: Option): T?
 
@@ -252,6 +256,20 @@ class ClientImpl(private val httpClient: WebClient,
         val result = request
                 .getCouchDbResponse<Map<String, *>?>(true)
         return result?.get("db_name") != null
+    }
+
+    override suspend fun createOrUpdateDesignDocument(designDocument: DesignDocument, updateIfExists: Boolean):DesignDocument {
+        val existingDesignDocument = this.get(designDocument.id, DesignDocument::class.java)
+        if(existingDesignDocument == null) {
+            return this.create(designDocument)
+        } else {
+            val (merged, changed) = existingDesignDocument.mergeWith(designDocument, true)
+            if (changed && updateIfExists) {
+                return this.update(existingDesignDocument.let { merged.copy(rev = it.rev) })
+            }
+
+            return existingDesignDocument
+        }
     }
 
     override suspend fun <T : CouchDbDocument> get(id: String, clazz: Class<T>, vararg options: Option): T? {

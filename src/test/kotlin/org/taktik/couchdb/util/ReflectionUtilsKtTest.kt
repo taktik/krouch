@@ -36,6 +36,5 @@ internal class ReflectionUtilsKtTest {
     @Test
     fun hasAnnotation() {
         assertTrue(hasAnnotation(Code::class.java, Views::class.java))
-        assertTrue(hasAnnotation(Code::class.java, View::class.java))
     }
 }
