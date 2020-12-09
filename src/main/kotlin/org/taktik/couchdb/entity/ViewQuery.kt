@@ -74,7 +74,7 @@ data class ViewQuery(
     fun key(key: ComplexKey) = this.copy(key = key)
     fun keys(keys: Collection<*>?) = this.copy(keys = keys?.toList())
     fun startKey(startKey: Any?) = this.copy(startKey = startKey)
-    fun endKey(startKey: Any?) = this.copy(startKey = startKey)
+    fun endKey(endKey: Any?) = this.copy(endKey = endKey)
     fun startDocId(startDocId: String?) = this.copy(startDocId = startDocId)
     fun endDocId(endDocId: String?) = this.copy(endDocId = endDocId)
 

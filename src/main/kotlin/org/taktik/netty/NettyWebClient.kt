@@ -68,12 +68,12 @@ class NettyRequest(
     )
 }
 
-class NettyResponse(private val responseReceiver: HttpClient.ResponseReceiver<*>, private val statusHandlers: Map<Int,(ResponseStatus) -> Mono<out Throwable>> = mapOf()) : Response {
+class NettyResponse(private val responseReceiver: HttpClient.ResponseReceiver<*>, private val statusHandlers: Map<Int, (ResponseStatus) -> Mono<out Throwable>> = mapOf()) : Response {
     override fun toFlux(): Publisher<ByteBuffer> {
         return responseReceiver.response { clientResponse, flux ->
             val code = clientResponse.status().code()
             statusHandlers[code]?.let {
-                flux.aggregate().asByteArray().flatMapMany { bytes ->
+                flux.aggregate().asByteArray().flatMap { bytes ->
                     val res = it(object : ResponseStatus(code) {
                         override fun responseBodyAsString() = bytes.toString(Charsets.UTF_8)
                     })
