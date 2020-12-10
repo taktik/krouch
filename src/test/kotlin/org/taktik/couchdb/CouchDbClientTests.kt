@@ -81,7 +81,7 @@ class CouchDbClientTests {
                 client.create(8, 2)
             }
 
-            testDAO.createOrUpdateDesignDocument(true)
+            testDAO.createOrUpdateDesignDocument()
         }
     }
 
