@@ -40,6 +40,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.produceIn
 import org.apache.http.HttpStatus.SC_CONFLICT
 import org.apache.http.HttpStatus.SC_NOT_FOUND
+import org.apache.http.HttpStatus.SC_UNAUTHORIZED
 import org.slf4j.LoggerFactory
 import org.taktik.couchdb.entity.Option
 import org.taktik.couchdb.entity.ActiveTask
@@ -172,9 +173,6 @@ interface Client {
     // Check if db exists
     suspend fun exists(): Boolean
 
-    //  Create or update a designDocument
-    suspend fun createOrUpdateDesignDocument(designDocument: DesignDocument, updateIfExists: Boolean) : DesignDocument
-
     // CRUD methods
     suspend fun <T : CouchDbDocument> get(id: String, clazz: Class<T>, vararg options: Option): T?
 
@@ -256,20 +254,6 @@ class ClientImpl(private val httpClient: WebClient,
         val result = request
                 .getCouchDbResponse<Map<String, *>?>(true)
         return result?.get("db_name") != null
-    }
-
-    override suspend fun createOrUpdateDesignDocument(designDocument: DesignDocument, updateIfExists: Boolean):DesignDocument {
-        val existingDesignDocument = this.get(designDocument.id, DesignDocument::class.java)
-        if(existingDesignDocument == null) {
-            return this.create(designDocument)
-        } else {
-            val (merged, changed) = existingDesignDocument.mergeWith(designDocument, true)
-            if (changed && updateIfExists) {
-                return this.update(existingDesignDocument.let { merged.copy(rev = it.rev) })
-            }
-
-            return existingDesignDocument
-        }
     }
 
     override suspend fun <T : CouchDbDocument> get(id: String, clazz: Class<T>, vararg options: Option): T? {
@@ -747,6 +731,7 @@ class ClientImpl(private val httpClient: WebClient,
         return try {
             return this
                     .retrieve()
+                    .onStatus(SC_UNAUTHORIZED) { response -> throw CouchDbException("Unauthorized", response.statusCode, response.responseBodyAsString()) }
                     .onStatus(SC_NOT_FOUND) { response -> throw CouchDbException("Not found", response.statusCode, response.responseBodyAsString()) }
                     .onStatus(SC_CONFLICT) { response -> throw CouchDbConflictException("Conflict", response.statusCode, response.responseBodyAsString()) }
                     .toFlow()

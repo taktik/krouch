@@ -3,8 +3,8 @@ package org.taktik.couchdb.util
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.taktik.couchdb.Code
-import org.taktik.couchdb.annotation.View
 import org.taktik.couchdb.annotation.Views
+import org.taktik.couchdb.dao.CodeDAO
 import org.taktik.couchdb.entity.Versionable
 import java.lang.reflect.Field
 import java.lang.reflect.Method
@@ -35,6 +35,6 @@ internal class ReflectionUtilsKtTest {
 
     @Test
     fun hasAnnotation() {
-        assertTrue(hasAnnotation(Code::class.java, Views::class.java))
+        assertTrue(hasAnnotation(CodeDAO::class.java, Views::class.java))
     }
 }
