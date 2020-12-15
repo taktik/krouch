@@ -35,7 +35,9 @@ import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.taktik.couchdb.dao.CodeDAO
 import org.taktik.net.web.HttpMethod
 import org.taktik.couchdb.entity.ViewQuery
 import org.taktik.couchdb.exception.CouchDbConflictException
@@ -56,10 +58,10 @@ import java.util.UUID
 @ExperimentalCoroutinesApi
 class CouchDbClientTests {
 
-    private val databaseHost = System.getProperty("icure.test.couchdb.server.url")
-    private val databaseName = System.getProperty("icure.test.couchdb.database.name")
-    private val userName = System.getProperty("icure.test.couchdb.username")
-    private val password = System.getProperty("icure.test.couchdb.password")
+    private val databaseHost =  System.getProperty("krouch.test.couchdb.server.url", "http://localhost:5984")
+    private val databaseName =  System.getProperty("krouch.test.couchdb.database.name", "krouch-test")
+    private val userName = System.getProperty("krouch.test.couchdb.username", "admin")
+    private val password = System.getProperty("krouch.test.couchdb.password", "password")
 
     private val testResponseAsString = URL("https://jsonplaceholder.typicode.com/posts").openStream().use { it.readBytes().toString(StandardCharsets.UTF_8) }
     private val httpClient = NettyWebClient()
@@ -68,6 +70,20 @@ class CouchDbClientTests {
             URI("$databaseHost/$databaseName"),
             userName,
             password)
+
+    private val testDAO = CodeDAO(client)
+
+    @BeforeEach
+    fun setupDatabase() {
+        //  Setup the Database and DesignDocument (via the DAO interface)
+        runBlocking {
+            if(!client.exists()){
+                client.create(8, 2)
+            }
+
+            testDAO.createOrUpdateDesignDocument()
+        }
+    }
 
     @Test
     fun testSubscribeChanges() = runBlocking {
@@ -265,7 +281,7 @@ class CouchDbClientTests {
         val limit = 100
         val query = ViewQuery()
                 .designDocId("_design/Code")
-                .viewName("by_language_type_label")
+                .viewName("by_type")
                 .limit(limit)
                 .includeDocs(true)
         val flow = client.queryViewIncludeDocs<List<*>, Int, Code>(query)
@@ -291,5 +307,10 @@ class CouchDbClientTests {
         assertEquals(revisions, fetched.map { it.rev })
     }
 
-
+    @Test
+    fun testBasicDAOQuery() = runBlocking {
+        val codes = testDAO.findCodeByTypeAndVersion("test", "test").map { it.doc }.toList()
+        val fetched = client.get<Code>(codes.map { it.id }).toList()
+        assertEquals(codes.map { it.code }, fetched.map { it.code })
+    }
 }

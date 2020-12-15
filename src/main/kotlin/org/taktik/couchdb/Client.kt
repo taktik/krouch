@@ -40,11 +40,13 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.produceIn
 import org.apache.http.HttpStatus.SC_CONFLICT
 import org.apache.http.HttpStatus.SC_NOT_FOUND
+import org.apache.http.HttpStatus.SC_UNAUTHORIZED
 import org.slf4j.LoggerFactory
 import org.taktik.couchdb.entity.Option
 import org.taktik.couchdb.entity.ActiveTask
 import org.taktik.couchdb.entity.AttachmentResult
 import org.taktik.couchdb.entity.Change
+import org.taktik.couchdb.entity.DesignDocument
 import org.taktik.couchdb.exception.CouchDbException
 import org.taktik.couchdb.entity.ViewQuery
 import org.taktik.couchdb.exception.ViewResultException
@@ -729,6 +731,7 @@ class ClientImpl(private val httpClient: WebClient,
         return try {
             return this
                     .retrieve()
+                    .onStatus(SC_UNAUTHORIZED) { response -> throw CouchDbException("Unauthorized", response.statusCode, response.responseBodyAsString()) }
                     .onStatus(SC_NOT_FOUND) { response -> throw CouchDbException("Not found", response.statusCode, response.responseBodyAsString()) }
                     .onStatus(SC_CONFLICT) { response -> throw CouchDbConflictException("Conflict", response.statusCode, response.responseBodyAsString()) }
                     .toFlow()
