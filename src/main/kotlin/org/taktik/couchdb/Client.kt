@@ -42,14 +42,18 @@ import org.apache.http.HttpStatus.SC_CONFLICT
 import org.apache.http.HttpStatus.SC_NOT_FOUND
 import org.apache.http.HttpStatus.SC_UNAUTHORIZED
 import org.slf4j.LoggerFactory
-import org.taktik.couchdb.entity.Option
 import org.taktik.couchdb.entity.ActiveTask
 import org.taktik.couchdb.entity.AttachmentResult
 import org.taktik.couchdb.entity.Change
-import org.taktik.couchdb.entity.DesignDocument
-import org.taktik.couchdb.exception.CouchDbException
+import org.taktik.couchdb.entity.Option
+import org.taktik.couchdb.entity.Security
+import org.taktik.couchdb.entity.Versionable
 import org.taktik.couchdb.entity.ViewQuery
+import org.taktik.couchdb.exception.CouchDbConflictException
+import org.taktik.couchdb.exception.CouchDbException
 import org.taktik.couchdb.exception.ViewResultException
+import org.taktik.couchdb.mango.MangoQuery
+import org.taktik.couchdb.mango.MangoResultException
 import org.taktik.couchdb.parser.EndArray
 import org.taktik.couchdb.parser.EndObject
 import org.taktik.couchdb.parser.FieldName
@@ -65,9 +69,6 @@ import org.taktik.couchdb.parser.nextValue
 import org.taktik.couchdb.parser.skipValue
 import org.taktik.couchdb.parser.split
 import org.taktik.couchdb.parser.toJsonEvents
-import org.taktik.couchdb.entity.Security
-import org.taktik.couchdb.entity.Versionable
-import org.taktik.couchdb.exception.CouchDbConflictException
 import org.taktik.couchdb.parser.toObject
 import org.taktik.net.append
 import org.taktik.net.param
@@ -75,7 +76,6 @@ import org.taktik.net.params
 import org.taktik.net.web.HttpMethod
 import org.taktik.net.web.Request
 import org.taktik.net.web.WebClient
-
 import java.lang.reflect.Type
 import java.nio.ByteBuffer
 import java.nio.charset.Charset
@@ -122,6 +122,8 @@ data class ViewRowWithMissingDoc<K, V>(override val id: String, override val key
         get() = error("Doc is missing for this row")
 }
 
+data class MangoQueryResult<T>(val doc: T?, val key: String?): ViewQueryResultEvent()
+
 private data class BulkUpdateRequest<T : CouchDbDocument>(val docs: Collection<T>, @JsonProperty("all_or_nothing") val allOrNothing: Boolean = false)
 private data class BulkDeleteRequest(val docs: Collection<DeleteRequest>, @JsonProperty("all_or_nothing") val allOrNothing: Boolean = false)
 
@@ -153,6 +155,10 @@ inline fun <reified K, reified V> Client.queryView(query: ViewQuery): Flow<ViewR
 inline fun <reified K> Client.queryViewNoValue(query: ViewQuery): Flow<ViewRowNoDoc<K, Nothing>> {
     require(!query.isIncludeDocs) { "Query must have includeDocs=false" }
     return queryView(query, K::class.java, Nothing::class.java, Nothing::class.java).filterIsInstance()
+}
+
+inline fun <reified T> Client.queryMango(query: MangoQuery<T>): Flow<MangoQueryResult<T>> {
+    return mangoQuery(query, T::class.java).filterIsInstance()
 }
 
 suspend inline fun <reified T : CouchDbDocument> Client.get(id: String): T? = this.get(id, T::class.java)
@@ -191,6 +197,8 @@ interface Client {
     // Query
     fun <K, V, T> queryView(query: ViewQuery, keyType: Class<K>, valueType: Class<V>, docType: Class<T>): Flow<ViewQueryResultEvent>
 
+    fun <T> mangoQuery(query: MangoQuery<T>, docType: Class<T>): Flow<ViewQueryResultEvent>
+
     // Changes observing
     fun <T : CouchDbDocument> subscribeForChanges(
         clazz: Class<T>,
@@ -220,6 +228,10 @@ private const val INCLUDED_DOC_FIELD_NAME = "doc"
 private const val TOTAL_ROWS_FIELD_NAME = "total_rows"
 private const val OFFSET_FIELD_NAME = "offset"
 private const val UPDATE_SEQUENCE_NAME = "update_seq"
+private const val DOCS_NAME = "docs"
+private const val BOOKMARK_NAME = "bookmark"
+private const val ERROR_NAME = "error"
+
 
 @ExperimentalCoroutinesApi
 class ClientImpl(private val httpClient: WebClient,
@@ -595,6 +607,57 @@ class ClientImpl(private val httpClient: WebClient,
                         }
                     }
                     else -> error("Expected EndObject or FieldName, found $nextEvent")
+                }
+            }
+            jsonEvents.cancel()
+        }
+    }
+
+
+
+    @FlowPreview
+    override fun <T> mangoQuery(query: MangoQuery<T>, docType: Class<T>): Flow<ViewQueryResultEvent> = flow {
+        coroutineScope {
+            val request = newRequest(query.generateQueryUrlFrom(dbURI.toString()), objectMapper.writeValueAsString(query))
+            val asyncParser = objectMapper.createNonBlockingByteArrayParser()
+
+            /** Execute the request and get the response as a Flow of [JsonEvent] **/
+            val jsonEvents = request.retrieve().toJsonEvents(asyncParser).produceIn(this)
+
+            // Response should be a Json object
+            val firstEvent = jsonEvents.receive()
+            check(firstEvent == StartObject) { "Expected data to start with an Object" }
+            resultLoop@ while (true) { // Loop through result object fields
+                when (val nextEvent = jsonEvents.receive()) {
+                    EndObject -> break@resultLoop // End of result object
+                    is FieldName -> {
+                        when (nextEvent.name) {
+                            DOCS_NAME -> { // We found the "rows" field
+                                // Rows field should be an array
+                                check(jsonEvents.receive() == StartArray) { "Expected rows field to be an array" }
+                                // At this point we are in the rows array, and StartArray event has been consumed
+
+                                while (jsonEvents.nextValue(asyncParser)?.let {
+                                        val doc = it.asParser(objectMapper).readValueAs(docType)
+                                        emit(MangoQueryResult(doc, null))
+                                    } != null) { // Loop through doc objects
+                                }
+                            }
+                            BOOKMARK_NAME -> {
+                                jsonEvents.nextSingleValueAs<StringValue>().let { bookmarkValue ->
+                                    emit(MangoQueryResult(null, bookmarkValue.value))
+                                }
+                            }
+                            ERROR_NAME -> {
+                                val error = jsonEvents.nextSingleValueAs<StringValue>().value
+                                jsonEvents.receive()
+                                val reason = jsonEvents.nextSingleValueAs<StringValue>().value
+                                throw MangoResultException(error, reason)
+                            }
+                            else -> jsonEvents.skipValue()
+                        }
+                    }
+                    else -> println("Expected EndObject or FieldName, found $nextEvent")
                 }
             }
             jsonEvents.cancel()
