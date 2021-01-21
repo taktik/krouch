@@ -29,7 +29,7 @@ data class GteOperator(val `$gte`: Any) : MangoOperator()
 data class LtOperator(val `$lt`: Any) : MangoOperator()
 data class LteOperator(val `$lte`: Any) : MangoOperator()
 data class ExistOperator(val `$exists`: Boolean) : MangoOperator()
-data class ElemMatchOperator(val `$elemMatch` : EqOperator) : MangoOperator()
+data class ElemMatchOperator(val `$elemMatch` : Any) : MangoOperator()
 open class Selector
 data class AndSelector(val `$and`: List<Map<String, MangoOperator>>?) : Selector()
 data class OrSelector(val `$or`: List<Map<String, MangoOperator>>?) : Selector()
@@ -166,5 +166,5 @@ class Exists(override var field: String, private val value: Boolean) : Condition
 }
 
 class ElemMatch(override var field: String, private val value: Any) : Condition(field) {
-    override fun buildMangoOperator() = ElemMatchOperator(EqOperator(value))
+    override fun buildMangoOperator() = ElemMatchOperator(value)
 }
