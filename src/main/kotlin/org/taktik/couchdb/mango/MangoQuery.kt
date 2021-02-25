@@ -74,7 +74,7 @@ class MangoQueryBuilder<T>(val designDocument: String) {
                 if (descending) {
                     sortFields.map { mapOf(it to "desc") }
                 } else {
-                    null
+                    sortFields.map { mapOf(it to "asc") }
                 }
         )
         return cachedQuery!!
