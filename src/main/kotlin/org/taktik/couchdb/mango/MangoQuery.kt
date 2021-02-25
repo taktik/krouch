@@ -36,7 +36,7 @@ data class AndSelector(val `$and`: List<Map<String, MangoOperator>>?) : Selector
 data class OrSelector(val `$or`: List<Map<String, MangoOperator>>?) : Selector()
 
 class MangoQueryBuilder<T>(val designDocument: String) {
-    private lateinit var sortFields: List<String>
+    private var sortFields = mutableListOf<String>()
     private var conditions = mutableListOf<Condition>()
     private val fields = mutableListOf<String>()
     private lateinit var index: String
@@ -98,7 +98,7 @@ class MangoQueryBuilder<T>(val designDocument: String) {
 
     fun sort(descending: Boolean, vararg sortFields: String) {
         this.descending = descending
-        this.sortFields = sortFields.asList()
+        this.sortFields = sortFields.toMutableList()
     }
 
 }
