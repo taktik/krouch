@@ -6,19 +6,20 @@ import java.net.URI
 const val MANGO_DESIGN_DOC_NAME_FOR_TYPE = "_design/%s_mango"
 
 data class MangoQuery<T>(
-        val fields: List<String>,
-        val limit: Int?,
-        val selector: Selector?,
-        val skip: Int?,
-        val use_index: List<String>,
-        val bookmark: String?,
-        val sort: List<Map<String, String>>?
+    val fields: List<String>,
+    val limit: Int?,
+    val selector: Selector?,
+    val skip: Int?,
+    val use_index: List<String>,
+    val bookmark: String?,
+    val sort: List<Map<String, String>>?
 ) {
     fun generateQueryUrlFrom(rootDbPath: String) = URI("$rootDbPath/_find")
 }
 
 inline fun <reified T> query(initializer: MangoQueryBuilder<T>.() -> Unit): MangoQuery<T> {
-    return MangoQueryBuilder<T>(format(MANGO_DESIGN_DOC_NAME_FOR_TYPE, T::class.java.simpleName)).apply(initializer).build()
+    return MangoQueryBuilder<T>(format(MANGO_DESIGN_DOC_NAME_FOR_TYPE, T::class.java.simpleName)).apply(initializer)
+        .build()
 }
 
 sealed class MangoOperator()
@@ -29,7 +30,7 @@ data class GteOperator(val `$gte`: Any) : MangoOperator()
 data class LtOperator(val `$lt`: Any) : MangoOperator()
 data class LteOperator(val `$lte`: Any) : MangoOperator()
 data class ExistOperator(val `$exists`: Boolean) : MangoOperator()
-data class ElemMatchOperator(val `$elemMatch` : Any) : MangoOperator()
+data class ElemMatchOperator(val `$elemMatch`: Any) : MangoOperator()
 open class Selector
 data class AndSelector(val `$and`: List<Map<String, MangoOperator>>?) : Selector()
 data class OrSelector(val `$or`: List<Map<String, MangoOperator>>?) : Selector()
@@ -65,17 +66,15 @@ class MangoQueryBuilder<T>(val designDocument: String) {
             Combination.OR -> OrSelector(selectorElements)
         }
         cachedQuery = MangoQuery(
-                fields.toList(),
-                limit,
-                selector,
-                skip,
-                listOf(designDocument, index),
-                bookmark,
-                if (descending) {
-                    sortFields.map { mapOf(it to "desc") }
-                } else {
-                    sortFields.map { mapOf(it to "asc") }
-                }
+            fields.toList(),
+            limit,
+            selector,
+            skip,
+            listOf(designDocument, index),
+            bookmark,
+            sortFields.takeUnless { it.isNullOrEmpty() }?.let {
+                sortFields.map { sf ->  mapOf( sf to  if (descending) { "desc" } else { "asc" }) }
+            }
         )
         return cachedQuery!!
     }
