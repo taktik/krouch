@@ -33,6 +33,7 @@ class Attachment(
         @field:JsonProperty("content_type") val contentType: String? = null,
         @JsonIgnore val contentLength: Long = 0,
         @field:JsonProperty("data") val dataBase64: String? = null,
+        @field:JsonProperty("stub")
         val isStub: Boolean = false,
         val revpos: Int = 0,
         val digest: String? = null
