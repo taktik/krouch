@@ -729,13 +729,14 @@ class ClientImpl(private val httpClient: WebClient,
     suspend fun <T> Request.getCouchDbResponse(clazz: Class<T>, emptyResponseAsNull: Boolean = false, nullIf404: Boolean = false): T? = this.getCouchDbResponseWithType(clazz, emptyResponseAsNull, nullIf404)
     suspend fun <T> Request.getCouchDbResponseWithType(type: Class<T>, emptyResponseAsNull: Boolean = false, nullIf404: Boolean = false): T? {
         return try {
-            return this
+            val result = this
                     .retrieve()
                     .onStatus(SC_UNAUTHORIZED) { response -> throw CouchDbException("Unauthorized", response.statusCode, response.responseBodyAsString()) }
                     .onStatus(SC_NOT_FOUND) { response -> throw CouchDbException("Not found", response.statusCode, response.responseBodyAsString()) }
                     .onStatus(SC_CONFLICT) { response -> throw CouchDbConflictException("Conflict", response.statusCode, response.responseBodyAsString()) }
                     .toFlow()
                     .toObject(type, objectMapper, emptyResponseAsNull)
+            result
         } catch (ex : CouchDbException) {
             if (ex.statusCode == 404 && nullIf404) null else throw ex
         }
