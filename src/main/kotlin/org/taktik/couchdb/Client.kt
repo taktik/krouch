@@ -17,6 +17,8 @@
 
 package org.taktik.couchdb
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
+import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -124,8 +126,10 @@ data class ViewRowWithMissingDoc<K, V>(override val id: String, override val key
 
 private data class BulkUpdateRequest<T : CouchDbDocument>(val docs: Collection<T>, @JsonProperty("all_or_nothing") val allOrNothing: Boolean = false)
 private data class BulkDeleteRequest(val docs: Collection<DeleteRequest>, @JsonProperty("all_or_nothing") val allOrNothing: Boolean = false)
+private data class DeleteRequest(@JsonProperty("_id") val id: String, @JsonProperty("_rev") val rev: String?, @JsonProperty("_deleted") val deleted: Boolean = true)
 
-data class DeleteRequest(@JsonProperty("_id") val id: String, @JsonProperty("_rev") val rev: String?, @JsonProperty("_deleted") val deleted: Boolean = true)
+@JsonInclude(JsonInclude.Include.NON_NULL)
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class BulkUpdateResult(val id: String, val rev: String?, val ok: Boolean?, val error: String?, val reason: String?)
 data class DocIdentifier(val id: String?, val rev: String?)
 
@@ -376,7 +380,6 @@ class ClientImpl(private val httpClient: WebClient,
 
         return request.getCouchDbResponse<AttachmentResult>()!!.rev
     }
-
 
     override suspend fun createAttachment(id: String, attachmentId: String, rev: String, contentType: String, data: Flow<ByteBuffer>): String = coroutineScope {
         require(id.isNotBlank()) { "Id cannot be blank" }
