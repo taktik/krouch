@@ -22,6 +22,7 @@ import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.databind.exc.InvalidFormatException
 import com.fasterxml.jackson.databind.util.TokenBuffer
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.google.common.reflect.TypeParameter
@@ -521,45 +522,51 @@ class ClientImpl(private val httpClient: WebClient,
                                         when (val nextRowEvent = jsonEvents.receive()) {
                                             EndObject -> break@rowLoop // End of row object
                                             is FieldName -> {
-                                                when (nextRowEvent.name) {
-                                                    // Parse doc id
-                                                    ID_FIELD_NAME -> {
-                                                        id = (jsonEvents.receive() as? StringValue)?.value
+                                                val name = nextRowEvent.name
+                                                try {
+                                                    when (name) {
+                                                        // Parse doc id
+                                                        ID_FIELD_NAME -> {
+                                                            id = (jsonEvents.receive() as? StringValue)?.value
                                                                 ?: error("id field should be a string")
-                                                    }
-                                                    // Parse key
-                                                    KEY_FIELD_NAME -> {
-                                                        val keyEvents = jsonEvents.nextValue(asyncParser)
+                                                        }
+                                                        // Parse key
+                                                        KEY_FIELD_NAME -> {
+                                                            val keyEvents = jsonEvents.nextValue(asyncParser)
                                                                 ?: throw IllegalStateException("Invalid json expecting key")
-                                                        @Suppress("BlockingMethodInNonBlockingContext")
-                                                        key = keyEvents.asParser(objectMapper).readValueAs(keyType)
-                                                    }
-                                                    // Parse value
-                                                    VALUE_FIELD_NAME -> {
-                                                        val valueEvents = jsonEvents.nextValue(asyncParser)
+                                                            @Suppress("BlockingMethodInNonBlockingContext")
+                                                            key = keyEvents.asParser(objectMapper).readValueAs(keyType)
+                                                        }
+                                                        // Parse value
+                                                        VALUE_FIELD_NAME -> {
+                                                            val valueEvents = jsonEvents.nextValue(asyncParser)
                                                                 ?: throw IllegalStateException("Invalid json field name")
-                                                        @Suppress("BlockingMethodInNonBlockingContext")
-                                                        value = valueEvents.asParser(objectMapper).readValueAs(valueType)
-                                                    }
-                                                    // Parse doc
-                                                    INCLUDED_DOC_FIELD_NAME -> {
-                                                        if (dbQuery.isIncludeDocs) {
-                                                            jsonEvents.nextValue(asyncParser)?.let {
-                                                                doc = it.asParser(objectMapper).readValueAs(docType)
+                                                            @Suppress("BlockingMethodInNonBlockingContext")
+                                                            value = valueEvents.asParser(objectMapper)
+                                                                .readValueAs(valueType)
+                                                        }
+                                                        // Parse doc
+                                                        INCLUDED_DOC_FIELD_NAME -> {
+                                                            if (dbQuery.isIncludeDocs) {
+                                                                jsonEvents.nextValue(asyncParser)?.let {
+                                                                    doc = it.asParser(objectMapper).readValueAs(docType)
+                                                                }
                                                             }
                                                         }
-                                                    }
-                                                    // Error field
-                                                    ERROR_FIELD_NAME -> {
-                                                        val error = jsonEvents.nextSingleValueAs<StringValue>()
-                                                        val errorMessage = error.value
-                                                        if (!ignoreError(dbQuery, errorMessage)) {
-                                                            // TODO retrieve key?
-                                                            throw ViewResultException(null, errorMessage)
+                                                        // Error field
+                                                        ERROR_FIELD_NAME -> {
+                                                            val error = jsonEvents.nextSingleValueAs<StringValue>()
+                                                            val errorMessage = error.value
+                                                            if (!ignoreError(dbQuery, errorMessage)) {
+                                                                // TODO retrieve key?
+                                                                throw ViewResultException(null, errorMessage)
+                                                            }
                                                         }
+                                                        // Skip other fields values
+                                                        else -> jsonEvents.skipValue()
                                                     }
-                                                    // Skip other fields values
-                                                    else -> jsonEvents.skipValue()
+                                                } catch (e: InvalidFormatException) {
+                                                    throw IllegalArgumentException("Cannot deserialize item with id: ${id ?: "N/A"}, error in $name", e)
                                                 }
                                             }
                                             else -> error("Expected EndObject or FieldName")
