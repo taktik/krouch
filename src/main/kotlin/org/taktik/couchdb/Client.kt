@@ -194,9 +194,9 @@ inline fun <reified T : CouchDbDocument> Client.subscribeForChanges(
     initialBackOffDelay: Long = 100,
     backOffFactor: Int = 2,
     maxDelay: Long = 10000
-): Flow<Change<T>> =
+): Flow<Change<*>> =
     this.subscribeForChanges(
-        T::class.java,
+        listOf(T::class.java),
         classDiscriminator,
         classProvider,
         since,
@@ -244,14 +244,14 @@ interface Client {
 
     // Changes observing
     fun <T : CouchDbDocument> subscribeForChanges(
-        clazz: Class<T>,
+        clazz: List<Class<in T>>,
         classDiscriminator: String,
         classProvider: (String) -> Class<T>?,
         since: String = "now",
         initialBackOffDelay: Long = 100,
         backOffFactor: Int = 2,
         maxDelay: Long = 10000
-    ): Flow<Change<T>>
+    ): Flow<Change<*>>
 
     fun subscribeForChangesRaw(
         classNames: List<String>,
@@ -756,14 +756,14 @@ class ClientImpl(
 
     @FlowPreview
     override fun <T : CouchDbDocument> subscribeForChanges(
-        clazz: Class<T>,
+        clazz: List<Class<in T>>,
         classDiscriminator: String,
         classProvider: (String) -> Class<T>?,
         since: String,
         initialBackOffDelay: Long,
         backOffFactor: Int,
         maxDelay: Long
-    ): Flow<Change<T>> = flow {
+    ): Flow<Change<*>> = flow {
         var lastSeq = since
         var delayMillis = initialBackOffDelay
         var changesFlow = internalSubscribeForChanges(clazz, lastSeq, classDiscriminator, classProvider)
@@ -881,11 +881,11 @@ class ClientImpl(
     @ExperimentalCoroutinesApi
     @FlowPreview
     private fun <T : CouchDbDocument> internalSubscribeForChanges(
-        clazz: Class<T>,
+        clazz: List<Class<in T>>,
         since: String,
         classDiscriminator: String,
         classProvider: (String) -> Class<T>?
-    ): Flow<Change<T>> = flow {
+    ): Flow<Change<*>> = flow {
         val charset = Charset.forName("UTF-8")
 
         log.info("Subscribing for changes of class $clazz")
@@ -930,7 +930,7 @@ class ClientImpl(
         changes.collect { (className, buffer) ->
             if (className != null) {
                 val changeClass = classProvider(className)
-                if (changeClass != null && clazz.isAssignableFrom(changeClass)) {
+                if (changeClass != null && clazz.any { it.isAssignableFrom(changeClass) } ) {
                     val coercedClass = changeClass
                     val changeType =
                         object : TypeToken<Change<T>>() {}.where(object : TypeParameter<T>() {}, coercedClass).type

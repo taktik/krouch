@@ -38,6 +38,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.taktik.couchdb.dao.CodeDAO
+import org.taktik.couchdb.entity.Change
 import org.taktik.net.web.HttpMethod
 import org.taktik.couchdb.entity.ViewQuery
 import org.taktik.couchdb.exception.CouchDbConflictException
@@ -98,7 +99,7 @@ class CouchDbClientTests {
         val changes = deferredChanges.await()
         assertEquals(createdCodes.size, changes.size)
         assertEquals(createdCodes.map { it.id }.toSet(), changes.map { it.id }.toSet())
-        assertEquals(codes.map { it.code }.toSet(), changes.map { it.doc.code }.toSet())
+        assertEquals(codes.map { it.code }.toSet(), changes.map { (it as? Change<Code>)?.doc?.code }.toSet())
     }
 
     @Test
