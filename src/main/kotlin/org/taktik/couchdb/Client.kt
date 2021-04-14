@@ -260,7 +260,7 @@ interface Client {
         initialBackOffDelay: Long = 100,
         backOffFactor: Int = 2,
         maxDelay: Long = 10000
-    ): Flow<JsonParser>
+    ): Flow<Pair<String?, TokenBuffer>>
 
     fun <T : CouchDbDocument> get(ids: Flow<String>, clazz: Class<T>): Flow<T>
     fun <T : CouchDbDocument> getForPagination(ids: Flow<String>, clazz: Class<T>): Flow<ViewQueryResultEvent>
