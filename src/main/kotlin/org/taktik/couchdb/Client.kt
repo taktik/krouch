@@ -18,6 +18,7 @@
 package org.taktik.couchdb
 
 import com.fasterxml.jackson.annotation.JsonProperty
+import com.fasterxml.jackson.core.JsonParser
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.util.TokenBuffer
@@ -31,13 +32,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.filterIsInstance
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.fold
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.produceIn
+import kotlinx.coroutines.flow.*
 import org.apache.http.HttpStatus.SC_CONFLICT
 import org.apache.http.HttpStatus.SC_NOT_FOUND
 import org.apache.http.HttpStatus.SC_UNAUTHORIZED
@@ -111,23 +106,43 @@ abstract class ViewRow<out K, out V, out T> : ViewQueryResultEvent() {
     abstract val doc: T?
 }
 
-data class ViewRowWithDoc<K, V, T>(override val id: String, override val key: K?, override val value: V?, override val doc: T) : ViewRow<K, V, T>()
-data class ViewRowNoDoc<K, V>(override val id: String, override val key: K?, override val value: V?) : ViewRow<K, V, Nothing>() {
+data class ViewRowWithDoc<K, V, T>(
+    override val id: String,
+    override val key: K?,
+    override val value: V?,
+    override val doc: T
+) : ViewRow<K, V, T>()
+
+data class ViewRowNoDoc<K, V>(override val id: String, override val key: K?, override val value: V?) :
+    ViewRow<K, V, Nothing>() {
     override val doc: Nothing
         get() = error("Row has no doc")
 }
 
-data class ViewRowWithMissingDoc<K, V>(override val id: String, override val key: K?, override val value: V?) : ViewRow<K, V, Nothing>() {
+data class ViewRowWithMissingDoc<K, V>(override val id: String, override val key: K?, override val value: V?) :
+    ViewRow<K, V, Nothing>() {
     override val doc: Nothing
         get() = error("Doc is missing for this row")
 }
 
-data class MangoQueryResult<T>(val doc: T?, val key: String?): ViewQueryResultEvent()
+data class MangoQueryResult<T>(val doc: T?, val key: String?) : ViewQueryResultEvent()
 
-private data class BulkUpdateRequest<T : CouchDbDocument>(val docs: Collection<T>, @JsonProperty("all_or_nothing") val allOrNothing: Boolean = false)
-private data class BulkDeleteRequest(val docs: Collection<DeleteRequest>, @JsonProperty("all_or_nothing") val allOrNothing: Boolean = false)
+private data class BulkUpdateRequest<T : CouchDbDocument>(
+    val docs: Collection<T>,
+    @JsonProperty("all_or_nothing") val allOrNothing: Boolean = false
+)
 
-data class DeleteRequest(@JsonProperty("_id") val id: String, @JsonProperty("_rev") val rev: String?, @JsonProperty("_deleted") val deleted: Boolean = true)
+private data class BulkDeleteRequest(
+    val docs: Collection<DeleteRequest>,
+    @JsonProperty("all_or_nothing") val allOrNothing: Boolean = false
+)
+
+data class DeleteRequest(
+    @JsonProperty("_id") val id: String,
+    @JsonProperty("_rev") val rev: String?,
+    @JsonProperty("_deleted") val deleted: Boolean = true
+)
+
 data class BulkUpdateResult(val id: String, val rev: String?, val ok: Boolean?, val error: String?, val reason: String?)
 data class DocIdentifier(val id: String?, val rev: String?)
 
@@ -169,10 +184,26 @@ suspend inline fun <reified T : CouchDbDocument> Client.create(entity: T): T = t
 
 suspend inline fun <reified T : CouchDbDocument> Client.update(entity: T): T = this.update(entity, T::class.java)
 
-inline fun <reified T : CouchDbDocument> Client.bulkUpdate(entities: List<T>): Flow<BulkUpdateResult> = this.bulkUpdate(entities, T::class.java)
+inline fun <reified T : CouchDbDocument> Client.bulkUpdate(entities: List<T>): Flow<BulkUpdateResult> =
+    this.bulkUpdate(entities, T::class.java)
 
-inline fun <reified T : CouchDbDocument> Client.subscribeForChanges(classDiscriminator: String, noinline classProvider: (String) -> Class<T>?, since: String = "now", initialBackOffDelay: Long = 100, backOffFactor: Int = 2, maxDelay: Long = 10000): Flow<Change<T>> =
-        this.subscribeForChanges(listOf(T::class.java), classDiscriminator, classProvider, since, initialBackOffDelay, backOffFactor, maxDelay)
+inline fun <reified T : CouchDbDocument> Client.subscribeForChanges(
+    classDiscriminator: String,
+    noinline classProvider: (String) -> Class<T>?,
+    since: String = "now",
+    initialBackOffDelay: Long = 100,
+    backOffFactor: Int = 2,
+    maxDelay: Long = 10000
+): Flow<Change<T>> =
+    this.subscribeForChanges(
+        T::class.java,
+        classDiscriminator,
+        classProvider,
+        since,
+        initialBackOffDelay,
+        backOffFactor,
+        maxDelay
+    )
 
 
 interface Client {
@@ -186,7 +217,14 @@ interface Client {
     fun <T : CouchDbDocument> get(ids: Collection<String>, clazz: Class<T>): Flow<T>
     fun <T : CouchDbDocument> getForPagination(ids: Collection<String>, clazz: Class<T>): Flow<ViewQueryResultEvent>
     fun getAttachment(id: String, attachmentId: String, rev: String? = null): Flow<ByteBuffer>
-    suspend fun createAttachment(id: String, attachmentId: String, rev: String, contentType: String, data: Flow<ByteBuffer>): String
+    suspend fun createAttachment(
+        id: String,
+        attachmentId: String,
+        rev: String,
+        contentType: String,
+        data: Flow<ByteBuffer>
+    ): String
+
     suspend fun deleteAttachment(id: String, attachmentId: String, rev: String): String
     suspend fun <T : CouchDbDocument> create(entity: T, clazz: Class<T>): T
     suspend fun <T : CouchDbDocument> update(entity: T, clazz: Class<T>): T
@@ -195,13 +233,18 @@ interface Client {
     fun <T : CouchDbDocument> bulkDelete(entities: Collection<T>): Flow<BulkUpdateResult>
 
     // Query
-    fun <K, V, T> queryView(query: ViewQuery, keyType: Class<K>, valueType: Class<V>, docType: Class<T>): Flow<ViewQueryResultEvent>
+    fun <K, V, T> queryView(
+        query: ViewQuery,
+        keyType: Class<K>,
+        valueType: Class<V>,
+        docType: Class<T>
+    ): Flow<ViewQueryResultEvent>
 
     fun <T> mangoQuery(query: MangoQuery<T>, docType: Class<T>): Flow<ViewQueryResultEvent>
 
     // Changes observing
     fun <T : CouchDbDocument> subscribeForChanges(
-        clazz: List<Class<T>>,
+        clazz: Class<T>,
         classDiscriminator: String,
         classProvider: (String) -> Class<T>?,
         since: String = "now",
@@ -209,6 +252,15 @@ interface Client {
         backOffFactor: Int = 2,
         maxDelay: Long = 10000
     ): Flow<Change<T>>
+
+    fun subscribeForChangesRaw(
+        classNames: List<String>,
+        classDiscriminator: String,
+        since: String = "now",
+        initialBackOffDelay: Long = 100,
+        backOffFactor: Int = 2,
+        maxDelay: Long = 10000
+    ): Flow<JsonParser>
 
     fun <T : CouchDbDocument> get(ids: Flow<String>, clazz: Class<T>): Flow<T>
     fun <T : CouchDbDocument> getForPagination(ids: Flow<String>, clazz: Class<T>): Flow<ViewQueryResultEvent>
@@ -234,11 +286,12 @@ private const val ERROR_NAME = "error"
 
 
 @ExperimentalCoroutinesApi
-class ClientImpl(private val httpClient: WebClient,
-                 private val dbURI: java.net.URI,
-                 private val username: String,
-                 private val password: String,
-                 private val objectMapper: ObjectMapper = ObjectMapper().also { it.registerModule(KotlinModule()) }
+class ClientImpl(
+    private val httpClient: WebClient,
+    private val dbURI: java.net.URI,
+    private val username: String,
+    private val password: String,
+    private val objectMapper: ObjectMapper = ObjectMapper().also { it.registerModule(KotlinModule()) }
 ) : Client {
     private val log = LoggerFactory.getLogger(javaClass.name)
 
@@ -248,7 +301,7 @@ class ClientImpl(private val httpClient: WebClient,
         }.let { n?.let { n -> it.param("n", n.toString()) } ?: it }, "", HttpMethod.PUT)
 
         val result = request
-                .getCouchDbResponse<Map<String, *>?>(true)
+            .getCouchDbResponse<Map<String, *>?>(true)
         return result?.get("ok") == true
     }
 
@@ -257,14 +310,14 @@ class ClientImpl(private val httpClient: WebClient,
 
         val request = newRequest(dbURI.append("_security"), doc, HttpMethod.PUT)
         val result = request
-                .getCouchDbResponse<Map<String, *>?>(true)
+            .getCouchDbResponse<Map<String, *>?>(true)
         return result?.get("ok") == true
     }
 
     override suspend fun exists(): Boolean {
         val request = newRequest(dbURI)
         val result = request
-                .getCouchDbResponse<Map<String, *>?>(true)
+            .getCouchDbResponse<Map<String, *>?>(true)
         return result?.get("db_name") != null
     }
 
@@ -275,10 +328,17 @@ class ClientImpl(private val httpClient: WebClient,
         return request.getCouchDbResponse(clazz, nullIf404 = true)
     }
 
-    override suspend fun <T : CouchDbDocument> get(id: String, rev: String, clazz: Class<T>, vararg options: Option): T? {
+    override suspend fun <T : CouchDbDocument> get(
+        id: String,
+        rev: String,
+        clazz: Class<T>,
+        vararg options: Option
+    ): T? {
         require(id.isNotBlank()) { "Id cannot be blank" }
         require(rev.isNotBlank()) { "Rev cannot be blank" }
-        val request = newRequest(dbURI.append(id).params((listOf("rev" to rev) + options.map { Pair(it.paramName(), "true") }).toMap()))
+        val request = newRequest(
+            dbURI.append(id).params((listOf("rev" to rev) + options.map { Pair(it.paramName(), "true") }).toMap())
+        )
 
         return request.getCouchDbResponse(clazz, nullIf404 = true)
     }
@@ -289,32 +349,38 @@ class ClientImpl(private val httpClient: WebClient,
     @ExperimentalCoroutinesApi
     override fun <T : CouchDbDocument> get(ids: Collection<String>, clazz: Class<T>): Flow<T> {
         return getForPagination(ids, clazz)
-                .filterIsInstance<ViewRowWithDoc<String, AllDocsViewValue, T>>()
-                .map { it.doc }
+            .filterIsInstance<ViewRowWithDoc<String, AllDocsViewValue, T>>()
+            .map { it.doc }
     }
 
     @FlowPreview
     @ExperimentalCoroutinesApi
     override fun <T : CouchDbDocument> get(ids: Flow<String>, clazz: Class<T>): Flow<T> {
         return getForPagination(ids, clazz)
-                .filterIsInstance<ViewRowWithDoc<String, AllDocsViewValue, T>>()
-                .map { it.doc }
+            .filterIsInstance<ViewRowWithDoc<String, AllDocsViewValue, T>>()
+            .map { it.doc }
     }
 
     @FlowPreview
     @ExperimentalCoroutinesApi
-    override fun <T : CouchDbDocument> getForPagination(ids: Collection<String>, clazz: Class<T>): Flow<ViewQueryResultEvent> {
+    override fun <T : CouchDbDocument> getForPagination(
+        ids: Collection<String>,
+        clazz: Class<T>
+    ): Flow<ViewQueryResultEvent> {
         val viewQuery = ViewQuery()
-                .allDocs()
-                .includeDocs(true)
-                .keys(ids)
-                .ignoreNotFound(true)
+            .allDocs()
+            .includeDocs(true)
+            .keys(ids)
+            .ignoreNotFound(true)
         return queryView(viewQuery, String::class.java, AllDocsViewValue::class.java, clazz)
     }
 
     @FlowPreview
     @ExperimentalCoroutinesApi
-    override fun <T : CouchDbDocument> getForPagination(ids: Flow<String>, clazz: Class<T>): Flow<ViewQueryResultEvent> = flow {
+    override fun <T : CouchDbDocument> getForPagination(
+        ids: Flow<String>,
+        clazz: Class<T>
+    ): Flow<ViewQueryResultEvent> = flow {
         ids.fold(Pair(persistentListOf<String>(), Triple(0, Integer.MAX_VALUE, 0L)), { acc, id ->
             if (acc.first.size == 100) {
                 getForPagination(acc.first, clazz).fold(Pair(persistentListOf(id), acc.second)) { res, it ->
@@ -327,7 +393,10 @@ class ClientImpl(private val httpClient: WebClient,
                             Pair(res.first, Triple(res.second.first + it.total, res.second.second, res.second.third))
                         }
                         is Offset -> {
-                            Pair(res.first, Triple(res.second.first, min(res.second.second, it.offset), res.second.third))
+                            Pair(
+                                res.first,
+                                Triple(res.second.first, min(res.second.second, it.offset), res.second.third)
+                            )
                         }
                         is UpdateSequence -> {
                             Pair(res.first, Triple(res.second.first, res.second.second, max(res.second.third, it.seq)))
@@ -373,7 +442,8 @@ class ClientImpl(private val httpClient: WebClient,
     override fun getAttachment(id: String, attachmentId: String, rev: String?): Flow<ByteBuffer> {
         require(id.isNotBlank()) { "Id cannot be blank" }
         require(attachmentId.isNotBlank()) { "attachmentId cannot be blank" }
-        val request = newRequest(dbURI.append(id).append(attachmentId).let { u -> rev?.let { u.param("rev", it) } ?: u })
+        val request =
+            newRequest(dbURI.append(id).append(attachmentId).let { u -> rev?.let { u.param("rev", it) } ?: u })
 
         return request.retrieve().toBytesFlow()
     }
@@ -390,7 +460,13 @@ class ClientImpl(private val httpClient: WebClient,
     }
 
 
-    override suspend fun createAttachment(id: String, attachmentId: String, rev: String, contentType: String, data: Flow<ByteBuffer>): String = coroutineScope {
+    override suspend fun createAttachment(
+        id: String,
+        attachmentId: String,
+        rev: String,
+        contentType: String,
+        data: Flow<ByteBuffer>
+    ): String = coroutineScope {
         require(id.isNotBlank()) { "Id cannot be blank" }
         require(attachmentId.isNotBlank()) { "attachmentId cannot be blank" }
         require(rev.isNotBlank()) { "rev cannot be blank" }
@@ -447,25 +523,27 @@ class ClientImpl(private val httpClient: WebClient,
 
     @FlowPreview
     @ExperimentalCoroutinesApi
-    override fun <T : CouchDbDocument> bulkUpdate(entities: Collection<T>, clazz: Class<T>): Flow<BulkUpdateResult> = flow {
-        coroutineScope {
-            val updateRequest = BulkUpdateRequest(entities)
-            val uri = dbURI.append("_bulk_docs")
-            val request = newRequest(uri, objectMapper.writeValueAsString(updateRequest))
+    override fun <T : CouchDbDocument> bulkUpdate(entities: Collection<T>, clazz: Class<T>): Flow<BulkUpdateResult> =
+        flow {
+            coroutineScope {
+                val updateRequest = BulkUpdateRequest(entities)
+                val uri = dbURI.append("_bulk_docs")
+                val request = newRequest(uri, objectMapper.writeValueAsString(updateRequest))
 
-            val asyncParser = objectMapper.createNonBlockingByteArrayParser()
-            val jsonTokens = request.retrieve().toJsonEvents(asyncParser).produceIn(this)
-            check(jsonTokens.receive() === StartArray) { "Expected result to start with StartArray" }
-            while (true) { // Loop through result array
-                val nextValue = jsonTokens.nextValue(asyncParser) ?: break
+                val asyncParser = objectMapper.createNonBlockingByteArrayParser()
+                val jsonTokens = request.retrieve().toJsonEvents(asyncParser).produceIn(this)
+                check(jsonTokens.receive() === StartArray) { "Expected result to start with StartArray" }
+                while (true) { // Loop through result array
+                    val nextValue = jsonTokens.nextValue(asyncParser) ?: break
 
-                @Suppress("BlockingMethodInNonBlockingContext")
-                val bulkUpdateResult = checkNotNull(nextValue.asParser(objectMapper).readValueAs(BulkUpdateResult::class.java))
-                emit(bulkUpdateResult)
+                    @Suppress("BlockingMethodInNonBlockingContext")
+                    val bulkUpdateResult =
+                        checkNotNull(nextValue.asParser(objectMapper).readValueAs(BulkUpdateResult::class.java))
+                    emit(bulkUpdateResult)
+                }
+                jsonTokens.cancel()
             }
-            jsonTokens.cancel()
         }
-    }
 
     @FlowPreview
     @ExperimentalCoroutinesApi
@@ -482,7 +560,8 @@ class ClientImpl(private val httpClient: WebClient,
                 val nextValue = jsonEvents.nextValue(asyncParser) ?: break
 
                 @Suppress("BlockingMethodInNonBlockingContext")
-                val bulkUpdateResult = checkNotNull(nextValue.asParser(objectMapper).readValueAs(BulkUpdateResult::class.java))
+                val bulkUpdateResult =
+                    checkNotNull(nextValue.asParser(objectMapper).readValueAs(BulkUpdateResult::class.java))
                 emit(bulkUpdateResult)
             }
             jsonEvents.cancel()
@@ -490,7 +569,12 @@ class ClientImpl(private val httpClient: WebClient,
     }
 
     @FlowPreview
-    override fun <K, V, T> queryView(query: ViewQuery, keyType: Class<K>, valueType: Class<V>, docType: Class<T>): Flow<ViewQueryResultEvent> = flow {
+    override fun <K, V, T> queryView(
+        query: ViewQuery,
+        keyType: Class<K>,
+        valueType: Class<V>,
+        docType: Class<T>
+    ): Flow<ViewQueryResultEvent> = flow {
         coroutineScope {
             val dbQuery = query.dbPath(dbURI.toString())
             val request = buildRequest(dbQuery)
@@ -534,21 +618,22 @@ class ClientImpl(private val httpClient: WebClient,
                                                     // Parse doc id
                                                     ID_FIELD_NAME -> {
                                                         id = (jsonEvents.receive() as? StringValue)?.value
-                                                                ?: error("id field should be a string")
+                                                            ?: error("id field should be a string")
                                                     }
                                                     // Parse key
                                                     KEY_FIELD_NAME -> {
                                                         val keyEvents = jsonEvents.nextValue(asyncParser)
-                                                                ?: throw IllegalStateException("Invalid json expecting key")
+                                                            ?: throw IllegalStateException("Invalid json expecting key")
                                                         @Suppress("BlockingMethodInNonBlockingContext")
                                                         key = keyEvents.asParser(objectMapper).readValueAs(keyType)
                                                     }
                                                     // Parse value
                                                     VALUE_FIELD_NAME -> {
                                                         val valueEvents = jsonEvents.nextValue(asyncParser)
-                                                                ?: throw IllegalStateException("Invalid json field name")
+                                                            ?: throw IllegalStateException("Invalid json field name")
                                                         @Suppress("BlockingMethodInNonBlockingContext")
-                                                        value = valueEvents.asParser(objectMapper).readValueAs(valueType)
+                                                        value =
+                                                            valueEvents.asParser(objectMapper).readValueAs(valueType)
                                                     }
                                                     // Parse doc
                                                     INCLUDED_DOC_FIELD_NAME -> {
@@ -577,7 +662,12 @@ class ClientImpl(private val httpClient: WebClient,
                                     // We finished parsing a row, emit the result
                                     id?.let {
                                         val row: ViewRow<K, V, T> = if (dbQuery.isIncludeDocs) {
-                                            if (doc != null) ViewRowWithDoc(it, key, value, doc) as ViewRow<K, V, T> else ViewRowWithMissingDoc(it, key, value)
+                                            if (doc != null) ViewRowWithDoc(
+                                                it,
+                                                key,
+                                                value,
+                                                doc
+                                            ) as ViewRow<K, V, T> else ViewRowWithMissingDoc(it, key, value)
                                         } else {
                                             ViewRowNoDoc(it, key, value)
                                         }
@@ -614,11 +704,11 @@ class ClientImpl(private val httpClient: WebClient,
     }
 
 
-
     @FlowPreview
     override fun <T> mangoQuery(query: MangoQuery<T>, docType: Class<T>): Flow<ViewQueryResultEvent> = flow {
         coroutineScope {
-            val request = newRequest(query.generateQueryUrlFrom(dbURI.toString()), objectMapper.writeValueAsString(query))
+            val request =
+                newRequest(query.generateQueryUrlFrom(dbURI.toString()), objectMapper.writeValueAsString(query))
             val asyncParser = objectMapper.createNonBlockingByteArrayParser()
 
             /** Execute the request and get the response as a Flow of [JsonEvent] **/
@@ -666,7 +756,7 @@ class ClientImpl(private val httpClient: WebClient,
 
     @FlowPreview
     override fun <T : CouchDbDocument> subscribeForChanges(
-        clazz: List<Class<T>>,
+        clazz: Class<T>,
         classDiscriminator: String,
         classProvider: (String) -> Class<T>?,
         since: String,
@@ -697,28 +787,116 @@ class ClientImpl(private val httpClient: WebClient,
         }
     }
 
+    override fun subscribeForChangesRaw(
+        classNames: List<String>,
+        classDiscriminator: String,
+        since: String,
+        initialBackOffDelay: Long,
+        backOffFactor: Int,
+        maxDelay: Long
+    ): Flow<Pair<String?, TokenBuffer>> = flow {
+        var lastSeq = since
+        var delayMillis = initialBackOffDelay
+        var changesFlow = internalSubscribeForChangesRaw(classNames, lastSeq, classDiscriminator)
+        while (true) {
+            try {
+                changesFlow.collect { change ->
+                    lastSeq = change.third
+                    delayMillis = initialBackOffDelay
+                    emit(Pair(change.first, change.second))
+                }
+            } catch (e: Exception) {
+                if (e is CancellationException) {
+                    throw e
+                }
+                log.warn("Error while listening for changes. Will try to re-subscribe in ${delayMillis}ms", e)
+                // Attempt to re-subscribe indefinitely, with an exponential backoff
+                delay(delayMillis)
+                changesFlow = internalSubscribeForChangesRaw(classNames, lastSeq, classDiscriminator)
+                delayMillis = (delayMillis * backOffFactor).coerceAtMost(maxDelay)
+            }
+        }
+    }
+
     override suspend fun activeTasks(): List<ActiveTask> {
         val uri = dbURI.append("_active_tasks")
         val request = newRequest(uri)
         return getCouchDbResponseWithTypeReified(request)!!
     }
 
-    private suspend inline fun <reified T> getCouchDbResponseWithTypeReified(request : Request) : T? {
+    private suspend inline fun <reified T> getCouchDbResponseWithTypeReified(request: Request): T? {
         return request.getCouchDbResponseWithType(T::class.java, nullIf404 = true)
     }
 
     @ExperimentalCoroutinesApi
     @FlowPreview
-    private fun <T : CouchDbDocument> internalSubscribeForChanges(clazz: List<Class<T>>, since: String, classDiscriminator: String, classProvider: (String) -> Class<T>?): Flow<Change<T>> = flow {
+    private fun internalSubscribeForChangesRaw(
+        classNames: List<String>,
+        since: String,
+        classDiscriminator: String,
+    ): Flow<Triple<String?, TokenBuffer, String>> = flow {
+        val charset = Charset.forName("UTF-8")
+
+        val asyncParser = objectMapper.createNonBlockingByteArrayParser()
+        // Construct request
+        val changesRequest = newRequest(
+            dbURI.append("_changes").param("feed", "continuous")
+                .param("heartbeat", "10000")
+                .param("include_docs", "true")
+                .param("since", since)
+        )
+
+        // Get the response as a Flow of CharBuffers (needed to split by line)
+        val responseText = changesRequest.retrieve().toTextFlow()
+        // Split by line
+        val splitByLine = responseText.split('\n')
+        // Convert to json events
+        val jsonEvents = splitByLine.map {
+            it.map {
+                charset.encode(it)
+            }.toJsonEvents(asyncParser)
+        }
+
+            jsonEvents.collect { events ->
+                TokenBuffer(asyncParser).let { tb ->
+                    var level = 0
+                    val type = events.foldIndexed(null as String?) { index, type, jsonEvent ->
+                        tb.copyFromJsonEvent(jsonEvent)
+
+                        when (jsonEvent) {
+                            is FieldName -> if (level == 2 && jsonEvent.name == classDiscriminator && index + 1 < events.size) (events[index + 1] as? StringValue)?.value else type
+                            is StartArray -> type.also { level++ }
+                            is StartObject -> type.also { level++ }
+                            is EndObject -> type.also { level-- }
+                            is EndArray -> type.also { level-- }
+                            else -> type
+                        }
+                    }
+                    type?.takeIf { classNames.contains(it) }?.let { emit(Triple(type, tb, since)) } // TODO get since from seq field
+                }
+            }
+    }
+
+
+    @ExperimentalCoroutinesApi
+    @FlowPreview
+    private fun <T : CouchDbDocument> internalSubscribeForChanges(
+        clazz: Class<T>,
+        since: String,
+        classDiscriminator: String,
+        classProvider: (String) -> Class<T>?
+    ): Flow<Change<T>> = flow {
         val charset = Charset.forName("UTF-8")
 
         log.info("Subscribing for changes of class $clazz")
         val asyncParser = objectMapper.createNonBlockingByteArrayParser()
         // Construct request
-        val changesRequest = newRequest(dbURI.append("_changes").param("feed", "continuous")
+        val changesRequest = newRequest(
+            dbURI.append("_changes").param("feed", "continuous")
                 .param("heartbeat", "10000")
                 .param("include_docs", "true")
-                .param("since", since))
+                .param("since", since)
+        )
 
         // Get the response as a Flow of CharBuffers (needed to split by line)
         val responseText = changesRequest.retrieve().toTextFlow()
@@ -737,7 +915,7 @@ class ClientImpl(private val httpClient: WebClient,
                 val type = events.foldIndexed(null as String?) { index, type, jsonEvent ->
                     tb.copyFromJsonEvent(jsonEvent)
 
-                    when(jsonEvent) {
+                    when (jsonEvent) {
                         is FieldName -> if (level == 2 && jsonEvent.name == classDiscriminator && index + 1 < events.size) (events[index + 1] as? StringValue)?.value else type
                         is StartArray -> type.also { level++ }
                         is StartObject -> type.also { level++ }
@@ -752,9 +930,10 @@ class ClientImpl(private val httpClient: WebClient,
         changes.collect { (className, buffer) ->
             if (className != null) {
                 val changeClass = classProvider(className)
-                if (changeClass != null && clazz.any { it.isAssignableFrom(changeClass) }) {
+                if (changeClass != null && clazz.isAssignableFrom(changeClass)) {
                     val coercedClass = changeClass
-                    val changeType = object : TypeToken<Change<T>>() {}.where(object : TypeParameter<T>() {}, coercedClass).type
+                    val changeType =
+                        object : TypeToken<Change<T>>() {}.where(object : TypeParameter<T>() {}, coercedClass).type
                     val typeRef = object : TypeReference<Change<T>>() {
                         override fun getType(): Type {
                             return changeType
@@ -768,43 +947,76 @@ class ClientImpl(private val httpClient: WebClient,
         }
     }
 
-    private fun newRequest(uri: java.net.URI, method: HttpMethod = HttpMethod.GET) = httpClient.uri(uri).method(method).basicAuth(username, password)
-    private fun newRequest(uri: java.net.URI, body: String, method: HttpMethod = HttpMethod.POST) = newRequest(uri, method)
+    private fun newRequest(uri: java.net.URI, method: HttpMethod = HttpMethod.GET) =
+        httpClient.uri(uri).method(method).basicAuth(username, password)
+
+    private fun newRequest(uri: java.net.URI, body: String, method: HttpMethod = HttpMethod.POST) =
+        newRequest(uri, method)
             .header(HttpHeaderNames.CONTENT_TYPE.toString(), "application/json")
             .body(body)
 
-    private fun newRequest(uri: String, method: HttpMethod = HttpMethod.GET) = httpClient.uri(uri).method(method).basicAuth(username, password)
+    private fun newRequest(uri: String, method: HttpMethod = HttpMethod.GET) =
+        httpClient.uri(uri).method(method).basicAuth(username, password)
+
     private fun newRequest(uri: String, body: String, method: HttpMethod = HttpMethod.POST) = newRequest(uri, method)
-            .header(HttpHeaderNames.CONTENT_TYPE.toString(), "application/json")
-            .body(body)
+        .header(HttpHeaderNames.CONTENT_TYPE.toString(), "application/json")
+        .body(body)
 
     private fun buildRequest(query: ViewQuery) =
-            if (query.hasMultipleKeys()) {
-                newRequest(query.buildQuery(), query.keysAsJson())
-            } else {
-                newRequest(query.buildQuery())
-            }
+        if (query.hasMultipleKeys()) {
+            newRequest(query.buildQuery(), query.keysAsJson())
+        } else {
+            newRequest(query.buildQuery())
+        }
 
     private fun ignoreError(query: ViewQuery, error: String): Boolean {
         return query.ignoreNotFound && NOT_FOUND_ERROR == error
     }
 
-    suspend fun <T> Request.getCouchDbResponse(clazz: Class<T>, emptyResponseAsNull: Boolean = false, nullIf404: Boolean = false): T? = this.getCouchDbResponseWithType(clazz, emptyResponseAsNull, nullIf404)
-    suspend fun <T> Request.getCouchDbResponseWithType(type: Class<T>, emptyResponseAsNull: Boolean = false, nullIf404: Boolean = false): T? {
+    suspend fun <T> Request.getCouchDbResponse(
+        clazz: Class<T>,
+        emptyResponseAsNull: Boolean = false,
+        nullIf404: Boolean = false
+    ): T? = this.getCouchDbResponseWithType(clazz, emptyResponseAsNull, nullIf404)
+
+    suspend fun <T> Request.getCouchDbResponseWithType(
+        type: Class<T>,
+        emptyResponseAsNull: Boolean = false,
+        nullIf404: Boolean = false
+    ): T? {
         return try {
             return this
-                    .retrieve()
-                    .onStatus(SC_UNAUTHORIZED) { response -> throw CouchDbException("Unauthorized", response.statusCode, response.responseBodyAsString()) }
-                    .onStatus(SC_NOT_FOUND) { response -> throw CouchDbException("Not found", response.statusCode, response.responseBodyAsString()) }
-                    .onStatus(SC_CONFLICT) { response -> throw CouchDbConflictException("Conflict", response.statusCode, response.responseBodyAsString()) }
-                    .toFlow()
-                    .toObject(type, objectMapper, emptyResponseAsNull)
-        } catch (ex : CouchDbException) {
+                .retrieve()
+                .onStatus(SC_UNAUTHORIZED) { response ->
+                    throw CouchDbException(
+                        "Unauthorized",
+                        response.statusCode,
+                        response.responseBodyAsString()
+                    )
+                }
+                .onStatus(SC_NOT_FOUND) { response ->
+                    throw CouchDbException(
+                        "Not found",
+                        response.statusCode,
+                        response.responseBodyAsString()
+                    )
+                }
+                .onStatus(SC_CONFLICT) { response ->
+                    throw CouchDbConflictException(
+                        "Conflict",
+                        response.statusCode,
+                        response.responseBodyAsString()
+                    )
+                }
+                .toFlow()
+                .toObject(type, objectMapper, emptyResponseAsNull)
+        } catch (ex: CouchDbException) {
             if (ex.statusCode == 404 && nullIf404) null else throw ex
         }
     }
 
-    private suspend inline fun <reified T> Request.getCouchDbResponse(nullIf404: Boolean = false): T? = getCouchDbResponse(T::class.java, null is T, nullIf404)
+    private suspend inline fun <reified T> Request.getCouchDbResponse(nullIf404: Boolean = false): T? =
+        getCouchDbResponse(T::class.java, null is T, nullIf404)
 
     private data class CouchDbErrorResponse(val error: String? = null, val reason: String? = null)
 
