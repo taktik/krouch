@@ -172,7 +172,7 @@ suspend inline fun <reified T : CouchDbDocument> Client.update(entity: T): T = t
 inline fun <reified T : CouchDbDocument> Client.bulkUpdate(entities: List<T>): Flow<BulkUpdateResult> = this.bulkUpdate(entities, T::class.java)
 
 inline fun <reified T : CouchDbDocument> Client.subscribeForChanges(classDiscriminator: String, noinline classProvider: (String) -> Class<T>?, since: String = "now", initialBackOffDelay: Long = 100, backOffFactor: Int = 2, maxDelay: Long = 10000): Flow<Change<T>> =
-        this.subscribeForChanges(T::class.java, classDiscriminator, classProvider, since, initialBackOffDelay, backOffFactor, maxDelay)
+        this.subscribeForChanges(listOf(T::class.java), classDiscriminator, classProvider, since, initialBackOffDelay, backOffFactor, maxDelay)
 
 
 interface Client {
@@ -201,7 +201,7 @@ interface Client {
 
     // Changes observing
     fun <T : CouchDbDocument> subscribeForChanges(
-        clazz: Class<T>,
+        clazz: List<Class<T>>,
         classDiscriminator: String,
         classProvider: (String) -> Class<T>?,
         since: String = "now",
@@ -666,7 +666,7 @@ class ClientImpl(private val httpClient: WebClient,
 
     @FlowPreview
     override fun <T : CouchDbDocument> subscribeForChanges(
-        clazz: Class<T>,
+        clazz: List<Class<T>>,
         classDiscriminator: String,
         classProvider: (String) -> Class<T>?,
         since: String,
@@ -709,7 +709,7 @@ class ClientImpl(private val httpClient: WebClient,
 
     @ExperimentalCoroutinesApi
     @FlowPreview
-    private fun <T : CouchDbDocument> internalSubscribeForChanges(clazz: Class<T>, since: String, classDiscriminator: String, classProvider: (String) -> Class<T>?): Flow<Change<T>> = flow {
+    private fun <T : CouchDbDocument> internalSubscribeForChanges(clazz: List<Class<T>>, since: String, classDiscriminator: String, classProvider: (String) -> Class<T>?): Flow<Change<T>> = flow {
         val charset = Charset.forName("UTF-8")
 
         log.info("Subscribing for changes of class $clazz")
@@ -752,7 +752,7 @@ class ClientImpl(private val httpClient: WebClient,
         changes.collect { (className, buffer) ->
             if (className != null) {
                 val changeClass = classProvider(className)
-                if (changeClass != null && clazz.isAssignableFrom(changeClass)) {
+                if (changeClass != null && clazz.any { it.isAssignableFrom(changeClass) }) {
                     val coercedClass = changeClass
                     val changeType = object : TypeToken<Change<T>>() {}.where(object : TypeParameter<T>() {}, coercedClass).type
                     val typeRef = object : TypeReference<Change<T>>() {

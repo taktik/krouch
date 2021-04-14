@@ -22,8 +22,8 @@ val repoPassword: String by project
 val mavenReleasesRepository: String by project
 
 plugins {
-    kotlin("jvm") version "1.4.10"
-    kotlin("kapt") version "1.4.10"
+    kotlin("jvm") version "1.4.32"
+    kotlin("kapt") version "1.4.32"
     `maven-publish`
 }
 
@@ -75,17 +75,17 @@ tasks.withType<KotlinCompile> {
 }
 
 dependencies {
-    api("com.github.pozo:mapstruct-kotlin:1.3.1.2")
-    kapt("com.github.pozo:mapstruct-kotlin-processor:1.3.1.2")
+    api("com.github.pozo:mapstruct-kotlin:1.4.0.0")
+    kapt("com.github.pozo:mapstruct-kotlin-processor:1.4.0.0")
 
-    implementation(group = "com.fasterxml.jackson.module", name = "jackson-module-kotlin", version = "2.11.4")
-    implementation(group = "com.fasterxml.jackson.core", name = "jackson-databind", version = "2.11.4")
-    implementation(group = "com.fasterxml.jackson.dataformat", name = "jackson-dataformat-smile", version = "2.11.4")
+    implementation(group = "com.fasterxml.jackson.module", name = "jackson-module-kotlin", version = "2.12.3")
+    implementation(group = "com.fasterxml.jackson.core", name = "jackson-databind", version = "2.12.3")
+    implementation(group = "com.fasterxml.jackson.dataformat", name = "jackson-dataformat-smile", version = "2.12.3")
     implementation(group = "org.jetbrains.kotlin", name = "kotlin-stdlib-jdk8")
     implementation(group = "org.jetbrains.kotlin", name = "kotlin-reflect")
-    implementation(group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version = "1.4.2")
-    implementation(group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-reactor", version = "1.4.2")
-    implementation(group = "org.jetbrains.kotlinx", name = "kotlinx-collections-immutable-jvm", version = "0.3")
+    implementation(group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version = "1.4.3")
+    implementation(group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-reactor", version = "1.4.3")
+    implementation(group = "org.jetbrains.kotlinx", name = "kotlinx-collections-immutable-jvm", version = "0.3.4")
 
     // Logging
     implementation(group = "ch.qos.logback", name = "logback-classic", version = "1.2.3")
@@ -97,8 +97,8 @@ dependencies {
 
     implementation(group = "com.google.guava", name = "guava", version = "30.0-jre")
     implementation(group = "org.apache.httpcomponents", name = "httpclient", version = "4.5.13")
-    implementation(group = "io.projectreactor", name = "reactor-core", version = "3.4.0")
-    implementation(group = "io.projectreactor.netty", name = "reactor-netty", version = "1.0.1")
+    implementation(group = "io.projectreactor", name = "reactor-core", version = "3.4.5")
+    implementation(group = "io.projectreactor.netty", name = "reactor-netty", version = "1.0.6")
 
     testImplementation(group = "org.junit.jupiter", name = "junit-jupiter", version = "5.4.2")
 }
