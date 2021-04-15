@@ -252,7 +252,7 @@ interface Client {
         maxDelay: Long = 10000
     ): Flow<Change<T>>
 
-    fun subscribeForIdAndRevOfChanges(
+    fun subscribeForChangeEvents(
         javaTypes: List<Class<*>>,
         classDiscriminator: String,
         since: String = "now",
@@ -787,7 +787,7 @@ class ClientImpl(
     }
 
     @FlowPreview
-    override fun subscribeForIdAndRevOfChanges(
+    override fun subscribeForChangeEvents(
         javaTypes: List<Class<*>>,
         classDiscriminator: String,
         since: String,
