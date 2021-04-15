@@ -26,11 +26,8 @@ import com.google.common.reflect.TypeParameter
 import com.google.common.reflect.TypeToken
 import io.netty.handler.codec.http.HttpHeaderNames
 import kotlinx.collections.immutable.persistentListOf
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.*
+import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.filterIsInstance
@@ -839,7 +836,7 @@ class ClientImpl(
         val charset = Charset.forName("UTF-8")
 
         log.info("Subscribing for changes of classes named:  $javaTypes")
-        val asyncParser = objectMapper.createNonBlockingByteArrayParser()
+        val asyncParser = withContext(IO) { objectMapper.createNonBlockingByteArrayParser() }
         // Construct request
         val changesRequest = newRequest(
             dbURI.append("_changes").param("feed", "continuous")
