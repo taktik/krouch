@@ -49,7 +49,7 @@ import org.taktik.couchdb.entity.Option
 import org.taktik.couchdb.entity.ActiveTask
 import org.taktik.couchdb.entity.AttachmentResult
 import org.taktik.couchdb.entity.Change
-import org.taktik.couchdb.entity.DesignDocument
+import org.taktik.couchdb.entity.DesignDocumentResult
 import org.taktik.couchdb.exception.CouchDbException
 import org.taktik.couchdb.entity.ViewQuery
 import org.taktik.couchdb.exception.ViewResultException
@@ -213,6 +213,7 @@ interface Client {
     suspend fun activeTasks(): List<ActiveTask>
     suspend fun create(q: Int?, n: Int?): Boolean
     suspend fun security(security: Security): Boolean
+    suspend fun designDocumentsIds(): Set<String>
 }
 
 private const val NOT_FOUND_ERROR = "not_found"
@@ -252,6 +253,12 @@ class ClientImpl(private val httpClient: WebClient,
         val result = request
                 .getCouchDbResponse<Map<String, *>?>(true)
         return result?.get("ok") == true
+    }
+
+    override suspend fun designDocumentsIds() : Set<String> {
+        val request = newRequest(dbURI.append("_design_docs"))
+        val result = request.getCouchDbResponse<DesignDocumentResult?>(true)
+        return result?.rows?.mapNotNull { it.key }?.toSet() ?: emptySet()
     }
 
     override suspend fun exists(): Boolean {
