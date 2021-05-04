@@ -16,6 +16,7 @@
  */
 package org.taktik.couchdb.support
 
+import org.apache.commons.codec.digest.DigestUtils
 import org.taktik.couchdb.annotation.Filter
 import org.taktik.couchdb.annotation.Filters
 import org.taktik.couchdb.annotation.ListFunction
@@ -43,17 +44,20 @@ class StdDesignDocumentFactory {
      *
      * @see org.ektorp.support.DesignDocumentFactory#generateFrom(java.lang.Object)
      */
-    fun generateFrom(id: String, metaDataSource: Any): DesignDocument {
+    fun generateFrom(baseId: String, metaDataSource: Any): DesignDocument {
         val metaDataClass: Class<*> = metaDataSource.javaClass
+        val views = viewGenerator.generateViews(metaDataSource)
         return DesignDocument(
-                id = id,
-                views = viewGenerator.generateViews(metaDataSource),
+                id = "${baseId}_${createViewVersionHash(views.values)}",
+                views = views,
                 lists = createListFunctions(metaDataClass),
                 shows = createShowFunctions(metaDataClass),
                 filters = createFilterFunctions(metaDataClass),
                 updateHandlers = createUpdateHandlerFunctions(metaDataClass)
         )
     }
+
+    private fun createViewVersionHash(views: Collection<org.taktik.couchdb.entity.View>) = DigestUtils.sha256Hex(views.joinToString { it.toString() }).substring(0, 4)
 
     private fun createFilterFunctions(metaDataClass: Class<*>): Map<String, String> {
         val shows: MutableMap<String, String> = HashMap()
