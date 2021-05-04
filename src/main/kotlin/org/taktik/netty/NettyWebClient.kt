@@ -34,6 +34,7 @@ import reactor.core.publisher.Mono
 import reactor.netty.http.client.HttpClient
 import java.net.URI
 import java.nio.ByteBuffer
+import java.time.Duration
 
 class NettyWebClient : WebClient {
     override fun uri(uri: URI): Request {
@@ -48,7 +49,7 @@ class NettyRequest(
     private val headers: HttpHeaders = DefaultHttpHeaders(),
     private val bodyPublisher: Flow<ByteBuffer>? = null
 ) : Request {
-    override fun method(method: HttpMethod): Request = NettyRequest(client, uri, method, headers, bodyPublisher)
+    override fun method(method: HttpMethod, timeoutDuration: Duration?): Request = NettyRequest(timeoutDuration?.let { client.responseTimeout(it) }?: client, uri, method, headers, bodyPublisher)
     override fun header(name: String, value: String): Request = NettyRequest(client, uri, method, headers.add(name, value), bodyPublisher)
     override fun body(producer: Flow<ByteBuffer>): Request = NettyRequest(client, uri, method, headers, producer)
     override fun retrieve(): Response = NettyResponse(

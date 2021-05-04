@@ -33,6 +33,7 @@ import java.nio.CharBuffer
 import java.nio.charset.Charset
 import java.nio.charset.CoderResult
 import java.nio.charset.StandardCharsets
+import java.time.Duration
 import java.util.Base64
 import kotlin.math.roundToInt
 
@@ -42,7 +43,7 @@ interface WebClient {
 }
 
 interface Request {
-    fun method(method: HttpMethod): Request
+    fun method(method: HttpMethod, timeoutDuration: Duration? = null): Request
     fun basicAuth(username: String, password: String): Request {
         return header(
             HttpHeaderNames.AUTHORIZATION.toString(),
