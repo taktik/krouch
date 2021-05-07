@@ -315,7 +315,7 @@ class ClientImpl(private val httpClient: WebClient,
     @FlowPreview
     @ExperimentalCoroutinesApi
     override fun <T : CouchDbDocument> getForPagination(ids: Flow<String>, clazz: Class<T>): Flow<ViewQueryResultEvent> = flow {
-        ids.fold(Pair(persistentListOf<String>(), Triple(0, Integer.MAX_VALUE, 0L)), { acc, id ->
+        ids.fold(Pair(persistentListOf<String>(), Triple(0, Integer.MAX_VALUE, 0L))) { acc, id ->
             if (acc.first.size == 100) {
                 getForPagination(acc.first, clazz).fold(Pair(persistentListOf(id), acc.second)) { res, it ->
                     when (it) {
@@ -327,7 +327,10 @@ class ClientImpl(private val httpClient: WebClient,
                             Pair(res.first, Triple(res.second.first + it.total, res.second.second, res.second.third))
                         }
                         is Offset -> {
-                            Pair(res.first, Triple(res.second.first, min(res.second.second, it.offset), res.second.third))
+                            Pair(
+                                res.first,
+                                Triple(res.second.first, min(res.second.second, it.offset), res.second.third)
+                            )
                         }
                         is UpdateSequence -> {
                             Pair(res.first, Triple(res.second.first, res.second.second, max(res.second.third, it.seq)))
@@ -338,7 +341,7 @@ class ClientImpl(private val httpClient: WebClient,
             } else {
                 Pair(acc.first.add(id), acc.second)
             }
-        }).let { remainder ->
+        }.let { remainder ->
             if (remainder.first.isNotEmpty())
                 getForPagination(remainder.first, clazz).fold(remainder.second) { counters, it ->
                     when (it) {
@@ -491,6 +494,8 @@ class ClientImpl(private val httpClient: WebClient,
     @FlowPreview
     override fun <K, V, T> queryView(query: ViewQuery, keyType: Class<K>, valueType: Class<V>, docType: Class<T>): Flow<ViewQueryResultEvent> = flow {
         coroutineScope {
+            val start = System.currentTimeMillis()
+
             val dbQuery = query.dbPath(dbURI.toString())
             val request = buildRequest(dbQuery)
             val asyncParser = objectMapper.createNonBlockingByteArrayParser()
@@ -615,6 +620,8 @@ class ClientImpl(private val httpClient: WebClient,
                 }
             }
             jsonEvents.cancel()
+
+            log.debug("Request {} : timing {} ms", request, System.currentTimeMillis() - start)
         }
     }
 
