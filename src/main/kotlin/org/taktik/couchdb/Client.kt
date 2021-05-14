@@ -660,7 +660,8 @@ class ClientImpl(private val httpClient: WebClient,
     }
 
     override suspend fun activeTasks(): List<ActiveTask> {
-        val uri = dbURI.append("_active_tasks")
+        val uri = (dbURI.takeIf { it.path.isEmpty() || it.path == "/" } ?: java.net.URI.create(dbURI.toString().removeSuffix(dbURI.path)))
+                    .append("_active_tasks")
         val request = newRequest(uri)
         return getCouchDbResponseWithTypeReified(request)!!
     }
