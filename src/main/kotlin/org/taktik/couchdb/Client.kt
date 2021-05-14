@@ -82,6 +82,7 @@ import org.taktik.net.web.WebClient
 import java.lang.reflect.Type
 import java.nio.ByteBuffer
 import java.nio.charset.Charset
+import java.time.Duration
 import kotlin.math.max
 import kotlin.math.min
 
@@ -150,7 +151,7 @@ inline fun <reified V, reified T> Client.queryViewIncludeDocsNoKey(query: ViewQu
     return queryView(query, Nothing::class.java, V::class.java, T::class.java).filterIsInstance()
 }
 
-inline fun <reified K, reified V> Client.queryView(query: ViewQuery): Flow<ViewRowNoDoc<K, V>> {
+inline fun <reified K, reified V> Client.queryView(query: ViewQuery, timeoutDuration: Duration? = null): Flow<ViewRowNoDoc<K, V>> {
     require(!query.isIncludeDocs) { "Query must have includeDocs=false" }
     return queryView(query, K::class.java, V::class.java, Nothing::class.java).filterIsInstance()
 }
@@ -194,7 +195,7 @@ interface Client {
     fun <T : CouchDbDocument> bulkDelete(entities: Collection<T>): Flow<BulkUpdateResult>
 
     // Query
-    fun <K, V, T> queryView(query: ViewQuery, keyType: Class<K>, valueType: Class<V>, docType: Class<T>): Flow<ViewQueryResultEvent>
+    fun <K, V, T> queryView(query: ViewQuery, keyType: Class<K>, valueType: Class<V>, docType: Class<T>, timeoutDuration: Duration? = null): Flow<ViewQueryResultEvent>
 
     // Changes observing
     fun <T : CouchDbDocument> subscribeForChanges(
@@ -492,12 +493,12 @@ class ClientImpl(private val httpClient: WebClient,
     }
 
     @FlowPreview
-    override fun <K, V, T> queryView(query: ViewQuery, keyType: Class<K>, valueType: Class<V>, docType: Class<T>): Flow<ViewQueryResultEvent> = flow {
+    override fun <K, V, T> queryView(query: ViewQuery, keyType: Class<K>, valueType: Class<V>, docType: Class<T>, timeoutDuration: Duration?): Flow<ViewQueryResultEvent> = flow {
         coroutineScope {
             val start = System.currentTimeMillis()
 
             val dbQuery = query.dbPath(dbURI.toString())
-            val request = buildRequest(dbQuery)
+            val request = buildRequest(dbQuery, timeoutDuration)
             val asyncParser = objectMapper.createNonBlockingByteArrayParser()
 
             /** Execute the request and get the response as a Flow of [JsonEvent] **/
@@ -729,7 +730,7 @@ class ClientImpl(private val httpClient: WebClient,
         }
     }
 
-    private fun newRequest(uri: java.net.URI, method: HttpMethod = HttpMethod.GET) = httpClient.uri(uri).method(method).basicAuth(username, password)
+    private fun newRequest(uri: java.net.URI, method: HttpMethod = HttpMethod.GET, timeoutDuration: Duration? = null) = httpClient.uri(uri).method(method, timeoutDuration).basicAuth(username, password)
     private fun newRequest(uri: java.net.URI, body: String, method: HttpMethod = HttpMethod.POST) = newRequest(uri, method)
             .header(HttpHeaderNames.CONTENT_TYPE.toString(), "application/json")
             .body(body)
@@ -739,11 +740,11 @@ class ClientImpl(private val httpClient: WebClient,
             .header(HttpHeaderNames.CONTENT_TYPE.toString(), "application/json")
             .body(body)
 
-    private fun buildRequest(query: ViewQuery) =
+    private fun buildRequest(query: ViewQuery, timeoutDuration: Duration? = null) =
             if (query.hasMultipleKeys()) {
                 newRequest(query.buildQuery(), query.keysAsJson())
             } else {
-                newRequest(query.buildQuery())
+                newRequest(query.buildQuery(), timeoutDuration = timeoutDuration)
             }
 
     private fun ignoreError(query: ViewQuery, error: String): Boolean {
