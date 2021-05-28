@@ -44,11 +44,11 @@ class StdDesignDocumentFactory {
      *
      * @see org.ektorp.support.DesignDocumentFactory#generateFrom(java.lang.Object)
      */
-    fun generateFrom(baseId: String, metaDataSource: Any): DesignDocument {
+    fun generateFrom(baseId: String, metaDataSource: Any, useVersioning: Boolean = true): DesignDocument {
         val metaDataClass: Class<*> = metaDataSource.javaClass
         val views = viewGenerator.generateViews(metaDataSource)
         return DesignDocument(
-                id = "${baseId}_${createViewVersionHash(views.values)}",
+                id = if (useVersioning) "${baseId}_${createViewVersionHash(views.values)}" else baseId,
                 views = views,
                 lists = createListFunctions(metaDataClass),
                 shows = createShowFunctions(metaDataClass),
