@@ -178,6 +178,7 @@ inline fun <reified T : CouchDbDocument> Client.subscribeForChanges(classDiscrim
 interface Client {
     // Check if db exists
     suspend fun exists(): Boolean
+    suspend fun destroyDatabase(): Boolean
 
     // CRUD methods
     suspend fun <T : CouchDbDocument> get(id: String, clazz: Class<T>, vararg options: Option): T?
@@ -267,6 +268,12 @@ class ClientImpl(private val httpClient: WebClient,
         val result = request
                 .getCouchDbResponse<Map<String, *>?>(true)
         return result?.get("db_name") != null
+    }
+
+    override suspend fun destroyDatabase(): Boolean {
+        val request = newRequest(dbURI, HttpMethod.DELETE)
+        val result = request.getCouchDbResponse<Map<String, *>?>(true)
+        return result?.get("ok") == true
     }
 
     override suspend fun <T : CouchDbDocument> get(id: String, clazz: Class<T>, vararg options: Option): T? {
