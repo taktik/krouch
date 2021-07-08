@@ -19,6 +19,7 @@ package org.taktik.couchdb.entity
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonInclude
+import com.fasterxml.jackson.annotation.JsonProperty
 import com.github.pozo.KotlinBuilder
 import org.taktik.couchdb.CouchDbDocument
 
@@ -26,14 +27,14 @@ import org.taktik.couchdb.CouchDbDocument
 @JsonIgnoreProperties(ignoreUnknown = true)
 @KotlinBuilder
 data class ReplicatorDocument(
-        override val id: String,
-        override val rev: String?,
+        @JsonProperty("_id") override val id: String,
+        @JsonProperty("_rev") override val rev: String?,
         val source: String? = null,
         val target: String? = null,
         val create_target: Boolean = false,
         val continuous: Boolean = false,
         val doc_ids: List<String>? = null,
-        override val revHistory: Map<String, String>? = null
+        @JsonProperty("rev_history") override val revHistory: Map<String, String>? = null
 ) : CouchDbDocument {
     override fun withIdRev(id: String?, rev: String) = id?.let { this.copy(id = it, rev = rev) } ?: this.copy(rev = rev)
 }
