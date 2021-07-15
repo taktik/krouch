@@ -36,9 +36,9 @@ data class ReplicatorDocument(
         val create_target: Boolean = false,
         val continuous: Boolean = false,
         val doc_ids: List<String>? = null,
-        @JsonProperty("_replication_state") val replicationState: String,
-        @JsonProperty("_replication_state_time") val replicationStateTime: String,
-        @JsonProperty("_replication_stats") val replicationStats: ReplicationStats,
+        @JsonProperty("_replication_state") val replicationState: String? = null,
+        @JsonProperty("_replication_state_time") val replicationStateTime: String? = null,
+        @JsonProperty("_replication_stats") val replicationStats: ReplicationStats? = null,
         @JsonProperty("rev_history") override val revHistory: Map<String, String>? = null
 ) : CouchDbDocument {
     override fun withIdRev(id: String?, rev: String) = id?.let { this.copy(id = it, rev = rev) } ?: this.copy(rev = rev)
