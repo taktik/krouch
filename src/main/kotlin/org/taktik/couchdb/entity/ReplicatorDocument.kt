@@ -22,6 +22,7 @@ import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.github.pozo.KotlinBuilder
 import org.taktik.couchdb.CouchDbDocument
+import java.io.Serializable
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -31,10 +32,27 @@ data class ReplicatorDocument(
         @JsonProperty("_rev") override val rev: String?,
         val source: String? = null,
         val target: String? = null,
+        val owner: String? = null,
         val create_target: Boolean = false,
         val continuous: Boolean = false,
         val doc_ids: List<String>? = null,
+        @JsonProperty("_replication_state") val replicationState: String,
+        @JsonProperty("_replication_state_time") val replicationStateTime: String,
+        @JsonProperty("_replication_stats") val replicationStats: ReplicationStats,
         @JsonProperty("rev_history") override val revHistory: Map<String, String>? = null
 ) : CouchDbDocument {
     override fun withIdRev(id: String?, rev: String) = id?.let { this.copy(id = it, rev = rev) } ?: this.copy(rev = rev)
 }
+
+@JsonInclude(JsonInclude.Include.NON_NULL)
+@JsonIgnoreProperties(ignoreUnknown = true)
+@KotlinBuilder
+data class ReplicationStats(
+        @JsonProperty("revisions_checked") val revisionsChecked: Int? = null,
+        @JsonProperty("missing_revisions_found") val missingRevisionsFound: Int? = null,
+        @JsonProperty("docs_read") val docsRead: Int? = null,
+        @JsonProperty("docs_written") val docsWritten: Int? = null,
+        @JsonProperty("changes_pending") val changesPending: Int? = null,
+        @JsonProperty("doc_write_failures") val docWriteFailures: Int? = null,
+        @JsonProperty("checkpointed_source_seq") val checkpointedSourceSeq: String? = null,
+) : Serializable
