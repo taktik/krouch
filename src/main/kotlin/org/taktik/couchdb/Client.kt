@@ -291,7 +291,7 @@ class ClientImpl(private val httpClient: WebClient,
         return request.getCouchDbResponse(clazz, nullIf404 = true)
     }
 
-    private data class AllDocsViewValue(val rev: String)
+    private data class AllDocsViewValue(val rev: String, val deleted: Boolean? = null)
 
     @FlowPreview
     @ExperimentalCoroutinesApi
