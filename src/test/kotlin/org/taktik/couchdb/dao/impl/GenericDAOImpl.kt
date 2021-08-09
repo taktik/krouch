@@ -24,16 +24,16 @@ import org.taktik.couchdb.entity.DesignDocument
 import org.taktik.couchdb.support.StdDesignDocumentFactory
 
 abstract class GenericDAOImpl<T : CouchDbDocument>(protected val entityClass: Class<T>, protected val client: Client) :
-        GenericDAO<T> {
+    GenericDAO<T> {
 
     val designDocumentId = "_design/${entityClass.simpleName}"
 
-    override suspend fun createOrUpdateDesignDocument(updateIfExists: Boolean) {
-        val designDocument = StdDesignDocumentFactory().generateFrom(designDocumentId, this)
-        val existingDesignDocument = client.get(designDocumentId, DesignDocument::class.java)
+    override suspend fun createOrUpdateDesignDocument(updateIfExists: Boolean, useVersioning: Boolean) {
+        val designDocument = StdDesignDocumentFactory().generateFrom(designDocumentId, this, useVersioning)
+        val existingDesignDocument = client.get(designDocument.id, DesignDocument::class.java) ?: client.get(designDocumentId, DesignDocument::class.java)
         val (merged, changed) = existingDesignDocument?.mergeWith(designDocument, true) ?: designDocument to true
         if (changed && (existingDesignDocument == null || updateIfExists)) {
-            client.update(existingDesignDocument?.let { merged.copy(rev = it.rev) } ?: merged, DesignDocument::class.java)
+            client.update(existingDesignDocument?.let { if (it.id == designDocument.id) merged.copy(rev = it.rev) else merged } ?: merged, DesignDocument::class.java)
         }
     }
 }

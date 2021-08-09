@@ -20,5 +20,5 @@ package org.taktik.couchdb.dao
 import org.taktik.couchdb.id.Identifiable
 
 interface GenericDAO<T : Identifiable<String>> {
-    suspend fun createOrUpdateDesignDocument(updateIfExists: Boolean = true)
+    suspend fun createOrUpdateDesignDocument(updateIfExists: Boolean = true, useVersioning: Boolean = true)
 }

@@ -107,6 +107,18 @@ class CouchDbClientTests {
     }
 
     @Test
+    fun testDestroyDatabase() = runBlocking {
+        val client = ClientImpl(
+            httpClient,
+            URI("$databaseHost/test_${UUID.randomUUID()}"),
+            userName,
+            password)
+        client.create(1,1)
+        delay(1000L)
+        assertTrue(client.destroyDatabase())
+    }
+
+    @Test
     fun testExists2() = runBlocking {
         val client = ClientImpl(
                 httpClient,
