@@ -20,8 +20,8 @@ package org.taktik.couchdb.entity
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.SerializationFeature
-import org.taktik.net.append
-import org.taktik.net.param
+import io.icure.asyncjacksonhttpclient.net.append
+import io.icure.asyncjacksonhttpclient.net.param
 import org.taktik.couchdb.util.Exceptions
 import java.net.URI
 
