@@ -799,9 +799,8 @@ class ClientImpl(
             if (className != null) {
                 val changeClass = classProvider(className)
                 if (changeClass != null && clazz.isAssignableFrom(changeClass)) {
-                    val coercedClass = changeClass
                     val changeType =
-                        object : TypeToken<Change<T>>() {}.where(object : TypeParameter<T>() {}, coercedClass).type
+                        object : TypeToken<Change<T>>() {}.where(object : TypeParameter<T>() {}, changeClass).type
                     val typeRef = object : TypeReference<Change<T>>() {
                         override fun getType(): Type {
                             return changeType
@@ -809,7 +808,7 @@ class ClientImpl(
                     }
                     // Parse as actual Change object with the correct class
                     @Suppress("BlockingMethodInNonBlockingContext")
-                    emit(buffer.asParser(objectMapper).readValueAs<Change<T>>(typeRef))
+                    emit(buffer.asParser(objectMapper).readValueAs(typeRef))
                 }
             }
         }
