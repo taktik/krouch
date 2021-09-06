@@ -24,7 +24,6 @@ val mavenReleasesRepository: String by project
 plugins {
     kotlin("jvm") version "1.4.21"
     kotlin("kapt") version "1.4.21"
-    `maven-publish`
 }
 
 buildscript {
@@ -36,6 +35,9 @@ buildscript {
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:1.4.21")
         classpath("org.jetbrains.kotlin:kotlin-allopen:1.4.21")
         classpath("com.taktik.gradle:gradle-plugin-git-version:1.0.13")
+    }
+    plugins {
+        `maven-publish`
     }
 }
 
@@ -85,6 +87,7 @@ dependencies {
     api("com.github.pozo:mapstruct-kotlin:1.3.1.2")
     kapt("com.github.pozo:mapstruct-kotlin-processor:1.3.1.2")
 
+    implementation(group = "io.icure", name = "async-jackson-http-client", version = "bc6844fb0b")
     implementation(group = "com.fasterxml.jackson.core", name = "jackson-databind", version = "2.11.3")
     implementation(group = "com.fasterxml.jackson.module", name = "jackson-module-kotlin", version = "2.11.3")
 
