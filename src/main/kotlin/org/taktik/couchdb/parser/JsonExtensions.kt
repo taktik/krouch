@@ -19,6 +19,7 @@ package org.taktik.couchdb.parser
 
 import com.fasterxml.jackson.core.JsonToken
 import com.fasterxml.jackson.core.async.ByteArrayFeeder
+import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.util.TokenBuffer
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -263,12 +264,31 @@ fun Flow<ByteBuffer>.toJsonEvents(asyncParser: com.fasterxml.jackson.core.JsonPa
 }
 
 @ExperimentalCoroutinesApi
-suspend fun <T> Flow<ByteBuffer>.toObject(type: Class<T>, mapper: ObjectMapper, emptyResponseAsNull: Boolean): T? =
-        mapper.createNonBlockingByteArrayParser().let { asyncParser ->
-            var buffer: TokenBuffer? = null
-            this.toJsonEvents(asyncParser).collect { (buffer ?: TokenBuffer(asyncParser).also { b -> buffer = b }).copyFromJsonEvent(it) }
-            buffer?.asParser(mapper)?.readValueAs(type) ?: if (emptyResponseAsNull) null else throw CouchDbException("Empty response is not allowed", 500, "")
-        }
+suspend inline fun <reified T> Flow<ByteBuffer>.toObject(mapper: ObjectMapper, emptyResponseAsNull: Boolean): T? = this.toObject(object : TypeReference<T>() {}, mapper, emptyResponseAsNull)
+
+@ExperimentalCoroutinesApi
+suspend fun <T> Flow<ByteBuffer>.toObject(type: TypeReference<T>, mapper: ObjectMapper, emptyResponseAsNull: Boolean): T? =
+    mapper.createNonBlockingByteArrayParser().let { asyncParser ->
+        var buffer: TokenBuffer? = null
+        this.toJsonEvents(asyncParser)
+            .collect { (buffer ?: TokenBuffer(asyncParser).also { b -> buffer = b }).copyFromJsonEvent(it) }
+
+        (buffer?.asParser(mapper)?.readValueAs(type) as T?)
+            ?: if (emptyResponseAsNull) null else throw CouchDbException("Empty response is not allowed", 500, "")
+    }
+
+@ExperimentalCoroutinesApi
+@Deprecated("Use other overloads instead as clazz loses generic information when used with T::class.java with a reified generic parameter")
+suspend fun <T> Flow<ByteBuffer>.toObject(clazz: Class<T>, mapper: ObjectMapper, emptyResponseAsNull: Boolean): T? =
+    mapper.createNonBlockingByteArrayParser().let { asyncParser ->
+        var buffer: TokenBuffer? = null
+        this.toJsonEvents(asyncParser)
+            .collect { (buffer ?: TokenBuffer(asyncParser).also { b -> buffer = b }).copyFromJsonEvent(it) }
+
+        (buffer?.asParser(mapper)?.readValueAs(clazz) as T?)
+            ?: if (emptyResponseAsNull) null else throw CouchDbException("Empty response is not allowed", 500, "")
+    }
+
 
 
 suspend fun ReceiveChannel<JsonEvent>.skipValue() {
