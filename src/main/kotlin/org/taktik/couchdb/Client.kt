@@ -167,7 +167,7 @@ inline fun <reified K> Client.queryViewNoValue(query: ViewQuery): Flow<ViewRowNo
     return queryView(query, K::class.java, Nothing::class.java, Nothing::class.java).filterIsInstance()
 }
 
-suspend inline fun <reified T : CouchDbDocument> Client.get(id: String): T? = this.get(id, T::class.java)
+suspend inline fun <reified T : CouchDbDocument> Client.get(id: String): T? = this.get(id, object: TypeReference<T> () {})
 
 inline fun <reified T : CouchDbDocument> Client.get(ids: List<String>): Flow<T> = this.get(ids, T::class.java)
 
@@ -204,25 +204,31 @@ interface Client {
 
     // CRUD methods
     suspend fun <T : CouchDbDocument> get(id: String, clazz: Class<T>, vararg options: Option): T?
-
+    suspend fun <T : CouchDbDocument> get(id: String, type: TypeReference<T>, vararg options: Option): T?
+    suspend fun <T : CouchDbDocument> get(id: String, type: TypeReference<T>, requestId: String, vararg options: Option): T?
     suspend fun <T : CouchDbDocument> get(id: String, rev: String, clazz: Class<T>, vararg options: Option): T?
-    fun <T : CouchDbDocument> get(ids: Collection<String>, clazz: Class<T>): Flow<T>
-    fun <T : CouchDbDocument> getForPagination(ids: Collection<String>, clazz: Class<T>): Flow<ViewQueryResultEvent>
-    fun getAttachment(id: String, attachmentId: String, rev: String? = null): Flow<ByteBuffer>
+    suspend fun <T : CouchDbDocument> get(id: String, rev: String, type: TypeReference<T>, vararg options: Option): T?
+    suspend fun <T : CouchDbDocument> get(id: String, rev: String, type: TypeReference<T>, requestId: String, vararg options: Option): T?
+    fun <T : CouchDbDocument> get(ids: Collection<String>, clazz: Class<T>, requestId: String? = null): Flow<T>
+    fun <T : CouchDbDocument> get(ids: Flow<String>, clazz: Class<T>, requestId: String? = null): Flow<T>
+    fun <T : CouchDbDocument> getForPagination(ids: Collection<String>, clazz: Class<T>, requestId: String? = null): Flow<ViewQueryResultEvent>
+    fun <T : CouchDbDocument> getForPagination(ids: Flow<String>, clazz: Class<T>, requestId: String? = null): Flow<ViewQueryResultEvent>
+    fun getAttachment(id: String, attachmentId: String, rev: String? = null, requestId: String? = null): Flow<ByteBuffer>
     suspend fun createAttachment(
         id: String,
         attachmentId: String,
         rev: String,
         contentType: String,
-        data: Flow<ByteBuffer>
+        data: Flow<ByteBuffer>,
+        requestId: String? = null
     ): String
 
-    suspend fun deleteAttachment(id: String, attachmentId: String, rev: String): String
-    suspend fun <T : CouchDbDocument> create(entity: T, clazz: Class<T>): T
-    suspend fun <T : CouchDbDocument> update(entity: T, clazz: Class<T>): T
-    fun <T : CouchDbDocument> bulkUpdate(entities: Collection<T>, clazz: Class<T>): Flow<BulkUpdateResult>
-    suspend fun <T : CouchDbDocument> delete(entity: T): DocIdentifier
-    fun <T : CouchDbDocument> bulkDelete(entities: Collection<T>): Flow<BulkUpdateResult>
+    suspend fun deleteAttachment(id: String, attachmentId: String, rev: String, requestId: String? = null): String
+    suspend fun <T : CouchDbDocument> create(entity: T, clazz: Class<T>, requestId: String? = null): T
+    suspend fun <T : CouchDbDocument> update(entity: T, clazz: Class<T>, requestId: String? = null): T
+    fun <T : CouchDbDocument> bulkUpdate(entities: Collection<T>, clazz: Class<T>, requestId: String? = null): Flow<BulkUpdateResult>
+    suspend fun <T : CouchDbDocument> delete(entity: T, requestId: String? = null): DocIdentifier
+    fun <T : CouchDbDocument> bulkDelete(entities: Collection<T>, requestId: String? = null): Flow<BulkUpdateResult>
 
     // Query
     fun <K, V, T> queryView(
@@ -230,7 +236,8 @@ interface Client {
         keyType: Class<K>,
         valueType: Class<V>,
         docType: Class<T>,
-        timeoutDuration: Duration? = null
+        timeoutDuration: Duration? = null,
+        requestId: String? = null
     ): Flow<ViewQueryResultEvent>
 
     // Changes observing
@@ -244,11 +251,8 @@ interface Client {
         maxDelay: Long = 10000
     ): Flow<Change<T>>
 
-    fun <T : CouchDbDocument> get(ids: Flow<String>, clazz: Class<T>): Flow<T>
-    fun <T : CouchDbDocument> getForPagination(ids: Flow<String>, clazz: Class<T>): Flow<ViewQueryResultEvent>
-
     suspend fun activeTasks(): List<ActiveTask>
-    suspend fun create(q: Int?, n: Int?): Boolean
+    suspend fun create(q: Int?, n: Int?, requestId: String? = null): Boolean
     suspend fun security(security: Security): Boolean
     suspend fun designDocumentsIds(): Set<String>
 }
@@ -274,7 +278,7 @@ class ClientImpl(
 ) : Client {
     private val log = LoggerFactory.getLogger(javaClass.name)
 
-    override suspend fun create(q: Int?, n: Int?): Boolean {
+    override suspend fun create(q: Int?, n: Int?, requestId: String?): Boolean {
         val request = newRequest(dbURI.let {
             q?.let { q -> it.param("q", q.toString()) } ?: it
         }.let { n?.let { n -> it.param("n", n.toString()) } ?: it }, "", HttpMethod.PUT)
@@ -313,9 +317,41 @@ class ClientImpl(
         return result?.get("ok") == true
     }
 
+    @Deprecated("Use overload with TypeReference instead to avoid loss of Generic information in lists")
     override suspend fun <T : CouchDbDocument> get(id: String, clazz: Class<T>, vararg options: Option): T? {
         require(id.isNotBlank()) { "Id cannot be blank" }
-        val request = newRequest(dbURI.append(id).params(options.map { Pair(it.paramName(), "true") }.toMap()))
+        val request = newRequest(dbURI.append(id).params(options.associate { Pair(it.paramName(), listOf("true")) }))
+
+        return request.getCouchDbResponse(clazz, nullIf404 = true)
+    }
+
+    override suspend fun <T : CouchDbDocument> get(id: String, type: TypeReference<T>, vararg options: Option): T? {
+        require(id.isNotBlank()) { "Id cannot be blank" }
+        val request = newRequest(dbURI.append(id).params(options.associate { Pair(it.paramName(), listOf("true")) }))
+
+        return request.getCouchDbResponse(type, nullIf404 = true)
+    }
+
+    override suspend fun <T : CouchDbDocument> get(
+        id: String,
+        type: TypeReference<T>,
+        requestId: String,
+        vararg options: Option
+    ): T? {
+        require(id.isNotBlank()) { "Id cannot be blank" }
+        val request = newRequest(dbURI.append(id).params(options.associate { Pair(it.paramName(), listOf("true")) }))
+
+        return request.getCouchDbResponse(type, nullIf404 = true)
+    }
+
+    @Deprecated("Use overload with TypeReference instead to avoid loss of Generic information in lists")
+    override suspend fun <T : CouchDbDocument> get(
+        id: String,
+        rev: String,
+        clazz: Class<T>,
+        vararg options: Option
+    ): T? {
+        val request = makeAndValidateRequest(id, rev, options)
 
         return request.getCouchDbResponse(clazz, nullIf404 = true)
     }
@@ -323,32 +359,53 @@ class ClientImpl(
     override suspend fun <T : CouchDbDocument> get(
         id: String,
         rev: String,
-        clazz: Class<T>,
+        type: TypeReference<T>,
         vararg options: Option
     ): T? {
+        val request = makeAndValidateRequest(id, rev, options)
+
+        return request.getCouchDbResponse(type, nullIf404 = true)
+    }
+
+    override suspend fun <T : CouchDbDocument> get(
+        id: String,
+        rev: String,
+        type: TypeReference<T>,
+        requestId: String,
+        vararg options: Option
+    ): T? {
+        val request = makeAndValidateRequest(id, rev, options)
+
+        return request.getCouchDbResponse(type, nullIf404 = true)
+    }
+
+    private fun makeAndValidateRequest(
+        id: String,
+        rev: String,
+        options: Array<out Option>
+    ): Request {
         require(id.isNotBlank()) { "Id cannot be blank" }
         require(rev.isNotBlank()) { "Rev cannot be blank" }
-        val request = newRequest(
-            dbURI.append(id).params((listOf("rev" to rev) + options.map { Pair(it.paramName(), "true") }).toMap())
+        return newRequest(
+            dbURI.append(id)
+                .params((listOf("rev" to listOf(rev)) + options.map { Pair(it.paramName(), listOf("true")) }).toMap())
         )
-
-        return request.getCouchDbResponse(clazz, nullIf404 = true)
     }
 
     private data class AllDocsViewValue(val rev: String, val deleted: Boolean? = null)
 
     @FlowPreview
     @ExperimentalCoroutinesApi
-    override fun <T : CouchDbDocument> get(ids: Collection<String>, clazz: Class<T>): Flow<T> {
-        return getForPagination(ids, clazz)
+    override fun <T : CouchDbDocument> get(ids: Collection<String>, clazz: Class<T>, requestId: String?): Flow<T> {
+        return getForPagination(ids, clazz, requestId)
             .filterIsInstance<ViewRowWithDoc<String, AllDocsViewValue, T>>()
             .map { it.doc }
     }
 
     @FlowPreview
     @ExperimentalCoroutinesApi
-    override fun <T : CouchDbDocument> get(ids: Flow<String>, clazz: Class<T>): Flow<T> {
-        return getForPagination(ids, clazz)
+    override fun <T : CouchDbDocument> get(ids: Flow<String>, clazz: Class<T>, requestId: String?): Flow<T> {
+        return getForPagination(ids, clazz, requestId)
             .filterIsInstance<ViewRowWithDoc<String, AllDocsViewValue, T>>()
             .map { it.doc }
     }
@@ -357,25 +414,27 @@ class ClientImpl(
     @ExperimentalCoroutinesApi
     override fun <T : CouchDbDocument> getForPagination(
         ids: Collection<String>,
-        clazz: Class<T>
+        clazz: Class<T>,
+        requestId: String?
     ): Flow<ViewQueryResultEvent> {
         val viewQuery = ViewQuery()
             .allDocs()
             .includeDocs(true)
             .keys(ids)
             .ignoreNotFound(true)
-        return queryView(viewQuery, String::class.java, AllDocsViewValue::class.java, clazz)
+        return queryView(viewQuery, String::class.java, AllDocsViewValue::class.java, clazz, requestId = requestId)
     }
 
     @FlowPreview
     @ExperimentalCoroutinesApi
     override fun <T : CouchDbDocument> getForPagination(
         ids: Flow<String>,
-        clazz: Class<T>
+        clazz: Class<T>,
+        requestId: String?
     ): Flow<ViewQueryResultEvent> = flow {
         ids.fold(Pair(persistentListOf<String>(), Triple(0, Integer.MAX_VALUE, 0L))) { acc, id ->
             if (acc.first.size == 100) {
-                getForPagination(acc.first, clazz).fold(Pair(persistentListOf(id), acc.second)) { res, it ->
+                getForPagination(acc.first, clazz, requestId).fold(Pair(persistentListOf(id), acc.second)) { res, it ->
                     when (it) {
                         is ViewRowWithDoc<*, *, *> -> {
                             emit(it)
@@ -431,7 +490,7 @@ class ClientImpl(
     }
 
     @ExperimentalCoroutinesApi
-    override fun getAttachment(id: String, attachmentId: String, rev: String?): Flow<ByteBuffer> {
+    override fun getAttachment(id: String, attachmentId: String, rev: String?, requestId: String?): Flow<ByteBuffer> {
         require(id.isNotBlank()) { "Id cannot be blank" }
         require(attachmentId.isNotBlank()) { "attachmentId cannot be blank" }
         val request =
@@ -440,7 +499,7 @@ class ClientImpl(
         return request.retrieve().toBytesFlow()
     }
 
-    override suspend fun deleteAttachment(id: String, attachmentId: String, rev: String): String {
+    override suspend fun deleteAttachment(id: String, attachmentId: String, rev: String, requestId: String?): String {
         require(id.isNotBlank()) { "Id cannot be blank" }
         require(attachmentId.isNotBlank()) { "attachmentId cannot be blank" }
         require(rev.isNotBlank()) { "rev cannot be blank" }
@@ -456,14 +515,17 @@ class ClientImpl(
         attachmentId: String,
         rev: String,
         contentType: String,
-        data: Flow<ByteBuffer>
+        data: Flow<ByteBuffer>,
+        requestId: String?
     ): String = coroutineScope {
         require(id.isNotBlank()) { "Id cannot be blank" }
         require(attachmentId.isNotBlank()) { "attachmentId cannot be blank" }
         require(rev.isNotBlank()) { "rev cannot be blank" }
 
         val uri = dbURI.append(id).append(attachmentId)
-        val request = newRequest(uri.param("rev", rev), HttpMethod.PUT).header("Content-type", contentType).body(data)
+        val request =
+            newRequest(uri.param("rev", rev), HttpMethod.PUT, requestId = requestId).header("Content-type", contentType)
+                .body(data)
 
         request.getCouchDbResponse<AttachmentResult>()!!.rev
     }
@@ -471,11 +533,13 @@ class ClientImpl(
     // CouchDB Response body for Create/Update/Delete
     private data class CUDResponse(val id: String, val rev: String, val ok: Boolean)
 
-    override suspend fun <T : CouchDbDocument> create(entity: T, clazz: Class<T>): T {
+    @Suppress("UNCHECKED_CAST")
+    override suspend fun <T : CouchDbDocument> create(entity: T, clazz: Class<T>, requestId: String?): T {
         val uri = dbURI
+
         @Suppress("BlockingMethodInNonBlockingContext")
         val serializedDoc = objectMapper.writerFor(clazz).writeValueAsString(entity)
-        val request = newRequest(uri, serializedDoc)
+        val request = newRequest(uri, serializedDoc, requestId = requestId)
 
         val createResponse = request.getCouchDbResponse<CUDResponse>()!!.also {
             check(it.ok)
@@ -485,13 +549,15 @@ class ClientImpl(
         return entity.withIdRev(createResponse.id, createResponse.rev) as T
     }
 
-    override suspend fun <T : CouchDbDocument> update(entity: T, clazz: Class<T>): T {
+    @Suppress("UNCHECKED_CAST")
+    override suspend fun <T : CouchDbDocument> update(entity: T, clazz: Class<T>, requestId: String?): T {
         val docId = entity.id
         require(docId.isNotBlank()) { "Id cannot be blank" }
         val updateURI = dbURI.append(docId)
+
         @Suppress("BlockingMethodInNonBlockingContext")
         val serializedDoc = objectMapper.writerFor(clazz).writeValueAsString(entity)
-        val request = newRequest(updateURI, serializedDoc, HttpMethod.PUT)
+        val request = newRequest(updateURI, serializedDoc, HttpMethod.PUT, requestId)
 
         val updateResponse = request.getCouchDbResponse<CUDResponse>()!!.also {
             check(it.ok)
@@ -501,13 +567,13 @@ class ClientImpl(
         return entity.withIdRev(updateResponse.id, updateResponse.rev) as T
     }
 
-    override suspend fun <T : CouchDbDocument> delete(entity: T): DocIdentifier {
+    override suspend fun <T : CouchDbDocument> delete(entity: T, requestId: String?): DocIdentifier {
         val id = entity.id
         require(id.isNotBlank()) { "Id cannot be blank" }
         require(!entity.rev.isNullOrBlank()) { "Revision cannot be blank" }
         val uri = dbURI.append(id).param("rev", entity.rev!!)
 
-        val request = newRequest(uri, HttpMethod.DELETE)
+        val request = newRequest(uri, HttpMethod.DELETE, requestId = requestId)
 
         return request.getCouchDbResponse<CUDResponse>()!!.also {
             check(it.ok)
@@ -516,55 +582,50 @@ class ClientImpl(
 
     @FlowPreview
     @ExperimentalCoroutinesApi
-    override fun <T : CouchDbDocument> bulkUpdate(entities: Collection<T>, clazz: Class<T>): Flow<BulkUpdateResult> =
+    override fun <T : CouchDbDocument> bulkUpdate(
+        entities: Collection<T>,
+        clazz: Class<T>,
+        requestId: String?
+    ): Flow<BulkUpdateResult> =
         flow {
             coroutineScope {
-                val updateRequest = BulkUpdateRequest(entities)
-                val uri = dbURI.append("_bulk_docs")
-
-                @Suppress("BlockingMethodInNonBlockingContext")
-                val request = newRequest(uri, objectMapper.writeValueAsString(updateRequest))
-
-                @Suppress("BlockingMethodInNonBlockingContext")
-                val asyncParser = objectMapper.createNonBlockingByteArrayParser()
-                val jsonTokens = request.retrieve().toJsonEvents(asyncParser).produceIn(this)
-                check(jsonTokens.receive() === StartArray) { "Expected result to start with StartArray" }
-                while (true) { // Loop through result array
-                    val nextValue = jsonTokens.nextValue(asyncParser) ?: break
-
-                    @Suppress("BlockingMethodInNonBlockingContext")
-                    val bulkUpdateResult =
-                        checkNotNull(nextValue.asParser(objectMapper).readValueAs(BulkUpdateResult::class.java))
-                    emit(bulkUpdateResult)
-                }
-                jsonTokens.cancel()
+                emitUpdateResults(this, BulkUpdateRequest(entities), requestId)
             }
         }
 
     @FlowPreview
     @ExperimentalCoroutinesApi
-    override fun <T : CouchDbDocument> bulkDelete(entities: Collection<T>): Flow<BulkUpdateResult> = flow {
-        coroutineScope {
-            val updateRequest = BulkDeleteRequest(entities.map { DeleteRequest(it.id, it.rev) })
-            val uri = dbURI.append("_bulk_docs")
-
-            @Suppress("BlockingMethodInNonBlockingContext")
-            val request = newRequest(uri, objectMapper.writeValueAsString(updateRequest))
-
-            @Suppress("BlockingMethodInNonBlockingContext")
-            val asyncParser = objectMapper.createNonBlockingByteArrayParser()
-            val jsonEvents = request.retrieve().toJsonEvents(asyncParser).produceIn(this)
-            check(jsonEvents.receive() == StartArray) { "Expected result to start with StartArray" }
-            while (true) { // Loop through result array
-                val nextValue = jsonEvents.nextValue(asyncParser) ?: break
-
-                @Suppress("BlockingMethodInNonBlockingContext")
-                val bulkUpdateResult =
-                    checkNotNull(nextValue.asParser(objectMapper).readValueAs(BulkUpdateResult::class.java))
-                emit(bulkUpdateResult)
+    override fun <T : CouchDbDocument> bulkDelete(entities: Collection<T>, requestId: String?): Flow<BulkUpdateResult> =
+        flow {
+            coroutineScope {
+                emitUpdateResults(this, BulkDeleteRequest(entities.map { DeleteRequest(it.id, it.rev) }), requestId)
             }
-            jsonEvents.cancel()
         }
+
+    @FlowPreview
+    private suspend fun FlowCollector<BulkUpdateResult>.emitUpdateResults(
+        scope: CoroutineScope,
+        requestBody: Any,
+        requestId: String?
+    ) {
+        val uri = dbURI.append("_bulk_docs")
+
+        @Suppress("BlockingMethodInNonBlockingContext")
+        val request = newRequest(uri, objectMapper.writeValueAsString(requestBody), requestId = requestId)
+
+        @Suppress("BlockingMethodInNonBlockingContext")
+        val asyncParser = objectMapper.createNonBlockingByteArrayParser()
+        val jsonEvents = request.retrieve().toJsonEvents(asyncParser).produceIn(scope)
+        check(jsonEvents.receive() == StartArray) { "Expected result to start with StartArray" }
+        while (true) { // Loop through result array
+            val nextValue = jsonEvents.nextValue(asyncParser) ?: break
+
+            @Suppress("BlockingMethodInNonBlockingContext")
+            val bulkUpdateResult =
+                checkNotNull(nextValue.asParser(objectMapper).readValueAs(BulkUpdateResult::class.java))
+            emit(bulkUpdateResult)
+        }
+        jsonEvents.cancel()
     }
 
     @FlowPreview
@@ -573,13 +634,15 @@ class ClientImpl(
         keyType: Class<K>,
         valueType: Class<V>,
         docType: Class<T>,
-        timeoutDuration: Duration?
+        timeoutDuration: Duration?,
+        requestId: String?
     ): Flow<ViewQueryResultEvent> = flow {
         coroutineScope {
             val start = System.currentTimeMillis()
 
             val dbQuery = query.dbPath(dbURI.toString())
-            val request = buildRequest(dbQuery, timeoutDuration)
+            val request = buildRequest(dbQuery, timeoutDuration, requestId)
+
             @Suppress("BlockingMethodInNonBlockingContext")
             val asyncParser = objectMapper.createNonBlockingByteArrayParser()
 
@@ -674,6 +737,7 @@ class ClientImpl(
                                     // We finished parsing a row, emit the result
                                     id?.let {
                                         val row: ViewRow<K, V, T> = if (dbQuery.isIncludeDocs) {
+                                            @Suppress("UNCHECKED_CAST")
                                             if (doc != null) ViewRowWithDoc(
                                                 it,
                                                 key,
@@ -750,19 +814,21 @@ class ClientImpl(
         }
     }
 
+    @Suppress("UNCHECKED_CAST")
     override suspend fun activeTasks(): List<ActiveTask> {
         val uri = (dbURI.takeIf { it.path.isEmpty() || it.path == "/" } ?: java.net.URI.create(
             dbURI.toString().removeSuffix(dbURI.path)
         ))
             .append("_active_tasks")
         val request = newRequest(uri)
-        return getCouchDbResponseWithTypeReified(request)!!
+        return getCouchDbResponse(request)!!
     }
 
-    private suspend inline fun <reified T> getCouchDbResponseWithTypeReified(request: Request): T? {
-        return request.getCouchDbResponseWithType(T::class.java, nullIf404 = true)
+    private suspend inline fun <reified T> getCouchDbResponse(request: Request): T? {
+        return request.getCouchDbResponse(object: TypeReference<T>() {}, nullIf404 = true)
     }
 
+    @Suppress("UnstableApiUsage")
     @ExperimentalCoroutinesApi
     @FlowPreview
     private fun <T : CouchDbDocument> internalSubscribeForChanges(
@@ -789,8 +855,8 @@ class ClientImpl(
         // Split by line
         val splitByLine = responseText.split('\n')
         // Convert to json events
-        val jsonEvents = splitByLine.map {
-            it.map {
+        val jsonEvents = splitByLine.map { ev ->
+            ev.map {
                 charset.encode(it)
             }.toJsonEvents(asyncParser)
         }
@@ -832,70 +898,93 @@ class ClientImpl(
         }
     }
 
-    private fun newRequest(uri: java.net.URI, method: HttpMethod = HttpMethod.GET, timeoutDuration: Duration? = null) =
+    private fun newRequest(
+        uri: java.net.URI,
+        method: HttpMethod = HttpMethod.GET,
+        timeoutDuration: Duration? = null,
+        requestId: String? = null
+    ) =
         httpClient.uri(uri).method(method, timeoutDuration).basicAuth(username, password)
+            .let { requestId?.let { rid -> it.header("X-Request-ID", rid) } ?: it }
 
-    private fun newRequest(uri: java.net.URI, body: String, method: HttpMethod = HttpMethod.POST) =
-        newRequest(uri, method)
+    private fun newRequest(
+        uri: java.net.URI,
+        body: String,
+        method: HttpMethod = HttpMethod.POST,
+        requestId: String? = null
+    ) =
+        newRequest(uri, method, requestId = requestId)
             .header(HttpHeaderNames.CONTENT_TYPE.toString(), "application/json")
             .body(body)
 
-    private fun buildRequest(query: ViewQuery, timeoutDuration: Duration? = null) =
+    private fun buildRequest(query: ViewQuery, timeoutDuration: Duration? = null, requestId: String? = null) =
         if (query.hasMultipleKeys()) {
-            newRequest(query.buildQuery(), query.keysAsJson())
+            newRequest(query.buildQuery(), query.keysAsJson(), requestId = requestId)
         } else {
-            newRequest(query.buildQuery(), timeoutDuration = timeoutDuration)
+            newRequest(query.buildQuery(), timeoutDuration = timeoutDuration, requestId = requestId)
         }
 
     private fun ignoreError(query: ViewQuery, error: String): Boolean {
         return query.ignoreNotFound && NOT_FOUND_ERROR == error
     }
 
+    @Deprecated("Use overload with TypeReference instead to avoid loss of Generic information in lists")
     private suspend fun <T> Request.getCouchDbResponse(
         clazz: Class<T>,
         emptyResponseAsNull: Boolean = false,
         nullIf404: Boolean = false
-    ): T? = this.getCouchDbResponseWithType(clazz, emptyResponseAsNull, nullIf404)
-
-    private suspend fun <T> Request.getCouchDbResponseWithType(
-        type: Class<T>,
-        emptyResponseAsNull: Boolean = false,
-        nullIf404: Boolean = false
     ): T? {
         return try {
-            val result = this
-                .retrieve()
-                .onStatus(SC_UNAUTHORIZED) { response ->
-                    throw CouchDbException(
-                        "Unauthorized",
-                        response.statusCode,
-                        response.responseBodyAsString()
-                    )
-                }
-                .onStatus(SC_NOT_FOUND) { response ->
-                    throw CouchDbException(
-                        "Not found",
-                        response.statusCode,
-                        response.responseBodyAsString()
-                    )
-                }
-                .onStatus(SC_CONFLICT) { response ->
-                    throw CouchDbConflictException(
-                        "Conflict",
-                        response.statusCode,
-                        response.responseBodyAsString()
-                    )
-                }
-                .toFlow()
-                .toObject(type, objectMapper, emptyResponseAsNull)
-            result
+            toFlow()
+                .toObject(clazz, objectMapper, emptyResponseAsNull)
         } catch (ex: CouchDbException) {
             if (ex.statusCode == 404 && nullIf404) null else throw ex
         }
     }
 
+    private suspend fun <T> Request.getCouchDbResponse(
+        type: TypeReference<T>,
+        emptyResponseAsNull: Boolean = false,
+        nullIf404: Boolean = false
+    ): T? {
+        return try {
+            toFlow()
+                .toObject(type, objectMapper, emptyResponseAsNull)
+        } catch (ex: CouchDbException) {
+            if (ex.statusCode == 404 && nullIf404) null else throw ex
+        }
+    }
+
+    private fun Request.toFlow() = this
+        .retrieve()
+        .onStatus(SC_UNAUTHORIZED) { response ->
+            throw CouchDbException(
+                "Unauthorized",
+                response.statusCode,
+                response.responseBodyAsString(),
+                response.headers.find { it.key == "X-Request-ID" }?.value
+            )
+        }
+        .onStatus(SC_NOT_FOUND) { response ->
+            throw CouchDbException(
+                "Not found",
+                response.statusCode,
+                response.responseBodyAsString(),
+                response.headers.find { it.key == "X-Request-ID" }?.value
+            )
+        }
+        .onStatus(SC_CONFLICT) { response ->
+            throw CouchDbConflictException(
+                "Conflict",
+                response.statusCode,
+                response.responseBodyAsString(),
+                response.headers.find { it.key == "X-Request-ID" }?.value
+            )
+        }
+        .toFlow()
+
     private suspend inline fun <reified T> Request.getCouchDbResponse(nullIf404: Boolean = false): T? =
-        getCouchDbResponse(T::class.java, null is T, nullIf404)
+        getCouchDbResponse(object: TypeReference<T>() {}, null is T, nullIf404)
 
 }
 

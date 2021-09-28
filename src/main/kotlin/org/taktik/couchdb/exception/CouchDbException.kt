@@ -17,6 +17,6 @@
 
 package org.taktik.couchdb.exception
 
-open class CouchDbException(message: String, val statusCode: Int, val statusMessage: String, val error: String? = null, val reason: String? = null) : RuntimeException(message)
+open class CouchDbException(message: String, val statusCode: Int, val statusMessage: String, val error: String? = null, val reason: String? = null, val couchRequestId: String? = null) : RuntimeException(message)
 
-class CouchDbConflictException(message: String, statusCode: Int, statusMessage: String, error: String? = null, reason: String? = null) : CouchDbException(message, statusCode, statusMessage, error, reason)
+class CouchDbConflictException(message: String, statusCode: Int, statusMessage: String, error: String? = null, reason: String? = null, couchRequestId: String? = null) : CouchDbException(message, statusCode, statusMessage, error, reason, couchRequestId)
