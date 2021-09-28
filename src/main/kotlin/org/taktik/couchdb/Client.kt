@@ -905,7 +905,7 @@ class ClientImpl(
         requestId: String? = null
     ) =
         httpClient.uri(uri).method(method, timeoutDuration).basicAuth(username, password)
-            .let { requestId?.let { rid -> it.header("X-Request-ID", rid) } ?: it }
+            .let { requestId?.let { rid -> it.header("X-Couch-Request-ID", rid) } ?: it }
 
     private fun newRequest(
         uri: java.net.URI,
@@ -962,7 +962,8 @@ class ClientImpl(
                 "Unauthorized",
                 response.statusCode,
                 response.responseBodyAsString(),
-                response.headers.find { it.key == "X-Request-ID" }?.value
+                response.headers.find { it.key == "X-Couch-Request-ID" }?.value,
+                response.headers.find { it.key == "X-Couch-Body-Time" }?.value
             )
         }
         .onStatus(SC_NOT_FOUND) { response ->
@@ -970,7 +971,8 @@ class ClientImpl(
                 "Not found",
                 response.statusCode,
                 response.responseBodyAsString(),
-                response.headers.find { it.key == "X-Request-ID" }?.value
+                response.headers.find { it.key == "X-Couch-Request-ID" }?.value,
+                response.headers.find { it.key == "X-Couch-Body-Time" }?.value
             )
         }
         .onStatus(SC_CONFLICT) { response ->
@@ -978,7 +980,8 @@ class ClientImpl(
                 "Conflict",
                 response.statusCode,
                 response.responseBodyAsString(),
-                response.headers.find { it.key == "X-Request-ID" }?.value
+                response.headers.find { it.key == "X-Couch-Request-ID" }?.value,
+                response.headers.find { it.key == "X-Couch-Body-Time" }?.value
             )
         }
         .toFlow()
