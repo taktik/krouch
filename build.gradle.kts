@@ -88,29 +88,29 @@ dependencies {
     kapt("com.github.pozo:mapstruct-kotlin-processor:1.3.1.2")
 
     implementation(group = "io.icure", name = "async-jackson-http-client", version = "0.1.9-b76146c579")
-    implementation(group = "com.fasterxml.jackson.core", name = "jackson-databind", version = "2.11.3")
-    implementation(group = "com.fasterxml.jackson.module", name = "jackson-module-kotlin", version = "2.11.3")
+    implementation(group = "com.fasterxml.jackson.core", name = "jackson-databind", version = "2.12.5")
+    implementation(group = "com.fasterxml.jackson.module", name = "jackson-module-kotlin", version = "2.12.5")
 
-    implementation(group = "org.jetbrains.kotlin", name = "kotlin-stdlib")
-    implementation(group = "org.jetbrains.kotlin", name = "kotlin-reflect")
-    implementation(group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version = "1.4.2")
-    implementation(group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-reactor", version = "1.4.2")
-    implementation(group = "org.jetbrains.kotlinx", name = "kotlinx-collections-immutable-jvm", version = "0.3")
+    implementation(group = "org.jetbrains.kotlin", name = "kotlin-stdlib", version = "1.5.21")
+    implementation(group = "org.jetbrains.kotlin", name = "kotlin-reflect", version = "1.5.21")
+    implementation(group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version = "1.5.2")
+    implementation(group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-reactor", version = "1.5.2")
+    implementation(group = "org.jetbrains.kotlinx", name = "kotlinx-collections-immutable-jvm", version = "0.3.4")
 
     // Logging
-    implementation(group = "ch.qos.logback", name = "logback-classic", version = "1.2.3")
-    implementation(group = "ch.qos.logback", name = "logback-access", version = "1.2.3")
-    implementation(group = "org.slf4j", name = "slf4j-api", version = "1.7.12")
-    implementation(group = "org.slf4j", name = "jul-to-slf4j", version = "1.7.12")
-    implementation(group = "org.slf4j", name = "jcl-over-slf4j", version = "1.7.12")
-    implementation(group = "org.slf4j", name = "log4j-over-slf4j", version = "1.7.12")
+    implementation(group = "ch.qos.logback", name = "logback-classic", version = "1.2.6")
+    implementation(group = "ch.qos.logback", name = "logback-access", version = "1.2.6")
+    implementation(group = "org.slf4j", name = "slf4j-api", version = "1.7.32")
+    implementation(group = "org.slf4j", name = "jul-to-slf4j", version = "1.7.32")
+    implementation(group = "org.slf4j", name = "jcl-over-slf4j", version = "1.7.32")
+    implementation(group = "org.slf4j", name = "log4j-over-slf4j", version = "1.7.32")
 
-    implementation(group = "com.google.guava", name = "guava", version = "30.0-jre")
+    implementation(group = "com.google.guava", name = "guava", version = "30.1.1-jre")
     implementation(group = "org.apache.httpcomponents", name = "httpclient", version = "4.5.13")
-    implementation(group = "io.projectreactor", name = "reactor-core", version = "3.4.0")
-    implementation(group = "io.projectreactor.netty", name = "reactor-netty", version = "1.0.1")
+    implementation(group = "io.projectreactor", name = "reactor-core", version = "3.4.10")
+    implementation(group = "io.projectreactor.netty", name = "reactor-netty", version = "1.0.11")
 
-    testImplementation(group = "org.junit.jupiter", name = "junit-jupiter", version = "5.4.2")
+    testImplementation(group = "org.junit.jupiter", name = "junit-jupiter", version = "5.8.0")
 }
 
 publishing {
