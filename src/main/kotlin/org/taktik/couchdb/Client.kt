@@ -61,6 +61,8 @@ import io.icure.asyncjacksonhttpclient.net.params
 import io.icure.asyncjacksonhttpclient.net.web.HttpMethod
 import io.icure.asyncjacksonhttpclient.net.web.Request
 import io.icure.asyncjacksonhttpclient.net.web.WebClient
+import org.taktik.couchdb.mango.MangoQuery
+import org.taktik.couchdb.mango.MangoResultException
 
 import java.lang.reflect.Type
 import java.nio.ByteBuffer
@@ -75,6 +77,8 @@ typealias CouchDbDocument = Versionable<String>
  * An event in the [Flow] returned by [Client.queryView]
  */
 sealed class ViewQueryResultEvent
+
+data class MangoQueryResult<T>(val doc: T?, val key: String?) : ViewQueryResultEvent()
 
 /**
  * This event contains the total number of result of the query
@@ -167,6 +171,10 @@ inline fun <reified K> Client.queryViewNoValue(query: ViewQuery): Flow<ViewRowNo
     return queryView(query, K::class.java, Nothing::class.java, Nothing::class.java).filterIsInstance()
 }
 
+inline fun <reified T> Client.queryMango(query: MangoQuery<T>): Flow<MangoQueryResult<T>> {
+    return mangoQuery(query, T::class.java).filterIsInstance()
+}
+
 suspend inline fun <reified T : CouchDbDocument> Client.get(id: String): T? = this.get(id, object: TypeReference<T> () {})
 
 inline fun <reified T : CouchDbDocument> Client.get(ids: List<String>): Flow<T> = this.get(ids, T::class.java)
@@ -240,6 +248,8 @@ interface Client {
         requestId: String? = null
     ): Flow<ViewQueryResultEvent>
 
+    fun <T> mangoQuery(query: MangoQuery<T>, docType: Class<T>): Flow<ViewQueryResultEvent>
+
     // Changes observing
     fun <T : CouchDbDocument> subscribeForChanges(
         clazz: Class<T>,
@@ -267,6 +277,9 @@ private const val INCLUDED_DOC_FIELD_NAME = "doc"
 private const val TOTAL_ROWS_FIELD_NAME = "total_rows"
 private const val OFFSET_FIELD_NAME = "offset"
 private const val UPDATE_SEQUENCE_NAME = "update_seq"
+private const val DOCS_NAME = "docs"
+private const val BOOKMARK_NAME = "bookmark"
+private const val ERROR_NAME = "error"
 
 @ExperimentalCoroutinesApi
 class ClientImpl(
@@ -626,6 +639,56 @@ class ClientImpl(
             emit(bulkUpdateResult)
         }
         jsonEvents.cancel()
+    }
+
+    @FlowPreview
+    override fun <T> mangoQuery(query: MangoQuery<T>, docType: Class<T>): Flow<ViewQueryResultEvent> = flow {
+        coroutineScope {
+            val request =
+                newRequest(query.generateQueryUrlFrom(dbURI.toString()), objectMapper.writeValueAsString(query))
+            val asyncParser = objectMapper.createNonBlockingByteArrayParser()
+
+            /** Execute the request and get the response as a Flow of [JsonEvent] **/
+            val jsonEvents = request.retrieve().toJsonEvents(asyncParser).produceIn(this)
+
+            // Response should be a Json object
+            val firstEvent = jsonEvents.receive()
+            check(firstEvent == StartObject) { "Expected data to start with an Object" }
+            resultLoop@ while (true) { // Loop through result object fields
+                when (val nextEvent = jsonEvents.receive()) {
+                    EndObject -> break@resultLoop // End of result object
+                    is FieldName -> {
+                        when (nextEvent.name) {
+                            DOCS_NAME -> { // We found the "rows" field
+                                // Rows field should be an array
+                                check(jsonEvents.receive() == StartArray) { "Expected rows field to be an array" }
+                                // At this point we are in the rows array, and StartArray event has been consumed
+
+                                while (jsonEvents.nextValue(asyncParser)?.let {
+                                        val doc = it.asParser(objectMapper).readValueAs(docType)
+                                        emit(MangoQueryResult(doc, null))
+                                    } != null) { // Loop through doc objects
+                                }
+                            }
+                            BOOKMARK_NAME -> {
+                                jsonEvents.nextSingleValueAs<StringValue>().let { bookmarkValue ->
+                                    emit(MangoQueryResult(null, bookmarkValue.value))
+                                }
+                            }
+                            ERROR_NAME -> {
+                                val error = jsonEvents.nextSingleValueAs<StringValue>().value
+                                jsonEvents.receive()
+                                val reason = jsonEvents.nextSingleValueAs<StringValue>().value
+                                throw MangoResultException(error, reason)
+                            }
+                            else -> jsonEvents.skipValue()
+                        }
+                    }
+                    else -> println("Expected EndObject or FieldName, found $nextEvent")
+                }
+            }
+            jsonEvents.cancel()
+        }
     }
 
     @FlowPreview
