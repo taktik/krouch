@@ -90,8 +90,8 @@ dependencies {
     implementation(group = "com.fasterxml.jackson.core", name = "jackson-databind", version = "2.12.5")
     implementation(group = "com.fasterxml.jackson.module", name = "jackson-module-kotlin", version = "2.12.5")
 
-    implementation(group = "org.jetbrains.kotlin", name = "kotlin-stdlib", version = "1.5.21")
-    implementation(group = "org.jetbrains.kotlin", name = "kotlin-reflect", version = "1.5.21")
+    implementation(group = "org.jetbrains.kotlin", name = "kotlin-stdlib", version = "1.4.32")
+    implementation(group = "org.jetbrains.kotlin", name = "kotlin-reflect", version = "1.4.32")
     implementation(group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version = "1.4.3")
     implementation(group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-reactor", version = "1.4.3")
     implementation(group = "org.jetbrains.kotlinx", name = "kotlinx-collections-immutable-jvm", version = "0.3.4")
