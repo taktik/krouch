@@ -22,8 +22,8 @@ val repoPassword: String by project
 val mavenReleasesRepository: String by project
 
 plugins {
-    kotlin("jvm") version "1.4.21"
-    kotlin("kapt") version "1.4.21"
+    kotlin("jvm") version "1.4.32"
+    kotlin("kapt") version "1.4.32"
 }
 
 buildscript {
@@ -32,8 +32,8 @@ buildscript {
         maven { url = uri("https://maven.taktik.be/content/groups/public") }
     }
     dependencies {
-        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:1.4.21")
-        classpath("org.jetbrains.kotlin:kotlin-allopen:1.4.21")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:1.4.32")
+        classpath("org.jetbrains.kotlin:kotlin-allopen:1.4.32")
         classpath("com.taktik.gradle:gradle-plugin-git-version:1.0.13")
     }
     plugins {
@@ -86,14 +86,14 @@ dependencies {
     api("com.github.pozo:mapstruct-kotlin:1.3.1.2")
     kapt("com.github.pozo:mapstruct-kotlin-processor:1.3.1.2")
 
-    implementation(group = "io.icure", name = "async-jackson-http-client", version = "0.1.11-5b7f5b35ee")
+    implementation(group = "io.icure", name = "async-jackson-http-client", version = "0.1.12-dd2039b194")
     implementation(group = "com.fasterxml.jackson.core", name = "jackson-databind", version = "2.12.5")
     implementation(group = "com.fasterxml.jackson.module", name = "jackson-module-kotlin", version = "2.12.5")
 
     implementation(group = "org.jetbrains.kotlin", name = "kotlin-stdlib", version = "1.5.21")
     implementation(group = "org.jetbrains.kotlin", name = "kotlin-reflect", version = "1.5.21")
-    implementation(group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version = "1.5.2")
-    implementation(group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-reactor", version = "1.5.2")
+    implementation(group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version = "1.4.3")
+    implementation(group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-reactor", version = "1.4.3")
     implementation(group = "org.jetbrains.kotlinx", name = "kotlinx-collections-immutable-jvm", version = "0.3.4")
 
     // Logging
