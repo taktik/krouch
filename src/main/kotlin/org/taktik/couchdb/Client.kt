@@ -992,7 +992,7 @@ class ClientImpl(
         return query.ignoreNotFound && NOT_FOUND_ERROR == error
     }
 
-    fun Request.retrieveAndInjectRequestId() = this.retrieve().onHeader("X-Couch-Request-ID") {
+    fun Request.retrieveAndInjectRequestId() = this.retrieve().onHeader("x-couch-request-id") {
         Mono.empty<Unit>().contextWrite { ctx -> ctx.put("X-Couch-Request-ID", it) }
     }
 
