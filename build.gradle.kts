@@ -86,7 +86,7 @@ dependencies {
     api("com.github.pozo:mapstruct-kotlin:1.3.1.2")
     kapt("com.github.pozo:mapstruct-kotlin-processor:1.3.1.2")
 
-    implementation(group = "io.icure", name = "async-jackson-http-client", version = "0.1.12-dd2039b194")
+    implementation(group = "io.icure", name = "async-jackson-http-client", version = "0.1.14-9e79365c38")
     implementation(group = "com.fasterxml.jackson.core", name = "jackson-databind", version = "2.12.5")
     implementation(group = "com.fasterxml.jackson.module", name = "jackson-module-kotlin", version = "2.12.5")
 

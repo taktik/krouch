@@ -63,6 +63,7 @@ import io.icure.asyncjacksonhttpclient.net.web.Request
 import io.icure.asyncjacksonhttpclient.net.web.WebClient
 import org.taktik.couchdb.mango.MangoQuery
 import org.taktik.couchdb.mango.MangoResultException
+import reactor.core.publisher.Mono
 
 import java.lang.reflect.Type
 import java.nio.ByteBuffer
@@ -989,6 +990,10 @@ class ClientImpl(
 
     private fun ignoreError(query: ViewQuery, error: String): Boolean {
         return query.ignoreNotFound && NOT_FOUND_ERROR == error
+    }
+
+    fun <T> Request.retrieveAndInjectRequestId() = this.retrieve().onHeader("X-Couch-Request-ID") {
+        Mono.empty<Unit>().contextWrite { ctx -> ctx.put("X-Couch-Request-ID", it) }
     }
 
     @Deprecated("Use overload with TypeReference instead to avoid loss of Generic information in lists")
