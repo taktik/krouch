@@ -510,7 +510,7 @@ class ClientImpl(
         val request =
             newRequest(dbURI.append(id).append(attachmentId).let { u -> rev?.let { u.param("rev", it) } ?: u })
 
-        return request.retrieve().toBytesFlow()
+        return request.retrieveAndInjectRequestId().toBytesFlow()
     }
 
     override suspend fun deleteAttachment(id: String, attachmentId: String, rev: String, requestId: String?): String {
@@ -629,7 +629,7 @@ class ClientImpl(
 
         @Suppress("BlockingMethodInNonBlockingContext")
         val asyncParser = objectMapper.createNonBlockingByteArrayParser()
-        val jsonEvents = request.retrieve().toJsonEvents(asyncParser).produceIn(scope)
+        val jsonEvents = request.retrieveAndInjectRequestId().toJsonEvents(asyncParser).produceIn(scope)
         check(jsonEvents.receive() == StartArray) { "Expected result to start with StartArray" }
         while (true) { // Loop through result array
             val nextValue = jsonEvents.nextValue(asyncParser) ?: break
@@ -650,7 +650,7 @@ class ClientImpl(
             val asyncParser = objectMapper.createNonBlockingByteArrayParser()
 
             /** Execute the request and get the response as a Flow of [JsonEvent] **/
-            val jsonEvents = request.retrieve().toJsonEvents(asyncParser).produceIn(this)
+            val jsonEvents = request.retrieveAndInjectRequestId().toJsonEvents(asyncParser).produceIn(this)
 
             // Response should be a Json object
             val firstEvent = jsonEvents.receive()
@@ -711,7 +711,7 @@ class ClientImpl(
             val asyncParser = objectMapper.createNonBlockingByteArrayParser()
 
             /** Execute the request and get the response as a Flow of [JsonEvent] **/
-            val jsonEvents = request.retrieve().toJsonEvents(asyncParser).produceIn(this)
+            val jsonEvents = request.retrieveAndInjectRequestId().toJsonEvents(asyncParser).produceIn(this)
 
             // Response should be a Json object
             val firstEvent = jsonEvents.receive()
@@ -915,7 +915,7 @@ class ClientImpl(
         )
 
         // Get the response as a Flow of CharBuffers (needed to split by line)
-        val responseText = changesRequest.retrieve().toTextFlow()
+        val responseText = changesRequest.retrieveAndInjectRequestId().toTextFlow()
         // Split by line
         val splitByLine = responseText.split('\n')
         // Convert to json events
@@ -992,7 +992,7 @@ class ClientImpl(
         return query.ignoreNotFound && NOT_FOUND_ERROR == error
     }
 
-    fun <T> Request.retrieveAndInjectRequestId() = this.retrieve().onHeader("X-Couch-Request-ID") {
+    fun Request.retrieveAndInjectRequestId() = this.retrieve().onHeader("X-Couch-Request-ID") {
         Mono.empty<Unit>().contextWrite { ctx -> ctx.put("X-Couch-Request-ID", it) }
     }
 
@@ -1024,7 +1024,7 @@ class ClientImpl(
     }
 
     private fun Request.toFlow() = this
-        .retrieve()
+        .retrieveAndInjectRequestId()
         .onStatus(SC_UNAUTHORIZED) { response ->
             throw CouchDbException(
                 "Unauthorized",
