@@ -265,6 +265,10 @@ private const val DOCS_NAME = "docs"
 private const val BOOKMARK_NAME = "bookmark"
 private const val ERROR_NAME = "error"
 
+interface HeaderHandler {
+    suspend fun handle(value: String)
+}
+
 @ExperimentalCoroutinesApi
 class ClientImpl(
     private val httpClient: WebClient,
@@ -272,7 +276,7 @@ class ClientImpl(
     private val username: String,
     private val password: String,
     private val objectMapper: ObjectMapper = ObjectMapper().also { it.registerModule(KotlinModule()) },
-    private val headerHandlers: Map<String, suspend (value: String) -> Unit> = mapOf()
+    private val headerHandlers: Map<String, HeaderHandler> = mapOf()
 ) : Client {
     private val log = LoggerFactory.getLogger(javaClass.name)
 
@@ -1038,9 +1042,9 @@ class ClientImpl(
 }
 
 @ExperimentalCoroutinesApi
-private fun Request.retrieveAndInjectRequestId(headerHandlers: Map<String, suspend (value: String) -> Unit>) = this.retrieve().let {
+private fun Request.retrieveAndInjectRequestId(headerHandlers: Map<String, HeaderHandler>) = this.retrieve().let {
     headerHandlers.entries.fold(it) { resp, (header, handler) ->
-        resp.onHeader(header) { value -> mono { handler(value) } }
+        resp.onHeader(header) { value -> mono { handler.handle(value) } }
     }
 }
 
