@@ -27,44 +27,27 @@ import com.fasterxml.jackson.databind.util.TokenBuffer
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.google.common.reflect.TypeParameter
 import com.google.common.reflect.TypeToken
-import io.netty.handler.codec.http.HttpHeaderNames
-import kotlinx.collections.immutable.persistentListOf
-import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.*
-import org.apache.http.HttpStatus.*
-import org.slf4j.LoggerFactory
-import org.taktik.couchdb.entity.*
-import org.taktik.couchdb.exception.CouchDbConflictException
-import org.taktik.couchdb.exception.CouchDbException
-import org.taktik.couchdb.exception.ViewResultException
-import io.icure.asyncjacksonhttpclient.parser.EndArray
-import io.icure.asyncjacksonhttpclient.parser.EndObject
-import io.icure.asyncjacksonhttpclient.parser.FieldName
-import io.icure.asyncjacksonhttpclient.parser.JsonEvent
-import io.icure.asyncjacksonhttpclient.parser.NumberValue
-import io.icure.asyncjacksonhttpclient.parser.StartArray
-import io.icure.asyncjacksonhttpclient.parser.StartObject
-import io.icure.asyncjacksonhttpclient.parser.StringValue
-import io.icure.asyncjacksonhttpclient.parser.copyFromJsonEvent
-import io.icure.asyncjacksonhttpclient.parser.nextSingleValueAs
-import io.icure.asyncjacksonhttpclient.parser.nextSingleValueAsOrNull
-import io.icure.asyncjacksonhttpclient.parser.nextValue
-import io.icure.asyncjacksonhttpclient.parser.skipValue
-import io.icure.asyncjacksonhttpclient.parser.split
-import io.icure.asyncjacksonhttpclient.parser.toJsonEvents
-import org.taktik.couchdb.entity.Security
-import org.taktik.couchdb.entity.Versionable
-import io.icure.asyncjacksonhttpclient.parser.toObject
 import io.icure.asyncjacksonhttpclient.net.append
 import io.icure.asyncjacksonhttpclient.net.param
 import io.icure.asyncjacksonhttpclient.net.params
 import io.icure.asyncjacksonhttpclient.net.web.HttpMethod
 import io.icure.asyncjacksonhttpclient.net.web.Request
 import io.icure.asyncjacksonhttpclient.net.web.WebClient
+import io.icure.asyncjacksonhttpclient.parser.*
+import io.icure.asyncjacksonhttpclient.parser.toObject
+import io.netty.handler.codec.http.HttpHeaderNames
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.reactor.mono
+import org.apache.http.HttpStatus.*
+import org.slf4j.LoggerFactory
+import org.taktik.couchdb.entity.*
+import org.taktik.couchdb.exception.CouchDbConflictException
+import org.taktik.couchdb.exception.CouchDbException
+import org.taktik.couchdb.exception.ViewResultException
 import org.taktik.couchdb.mango.MangoQuery
 import org.taktik.couchdb.mango.MangoResultException
-import reactor.core.publisher.Mono
-
 import java.lang.reflect.Type
 import java.nio.ByteBuffer
 import java.nio.charset.Charset
@@ -288,7 +271,8 @@ class ClientImpl(
     private val dbURI: java.net.URI,
     private val username: String,
     private val password: String,
-    private val objectMapper: ObjectMapper = ObjectMapper().also { it.registerModule(KotlinModule()) }
+    private val objectMapper: ObjectMapper = ObjectMapper().also { it.registerModule(KotlinModule()) },
+    private val headerHandlers: Map<String, suspend (value: String) -> Unit> = mapOf()
 ) : Client {
     private val log = LoggerFactory.getLogger(javaClass.name)
 
@@ -510,7 +494,7 @@ class ClientImpl(
         val request =
             newRequest(dbURI.append(id).append(attachmentId).let { u -> rev?.let { u.param("rev", it) } ?: u })
 
-        return request.retrieveAndInjectRequestId().toBytesFlow()
+        return request.retrieveAndInjectRequestId(headerHandlers).toBytesFlow()
     }
 
     override suspend fun deleteAttachment(id: String, attachmentId: String, rev: String, requestId: String?): String {
@@ -629,7 +613,7 @@ class ClientImpl(
 
         @Suppress("BlockingMethodInNonBlockingContext")
         val asyncParser = objectMapper.createNonBlockingByteArrayParser()
-        val jsonEvents = request.retrieveAndInjectRequestId().toJsonEvents(asyncParser).produceIn(scope)
+        val jsonEvents = request.retrieveAndInjectRequestId(headerHandlers).toJsonEvents(asyncParser).produceIn(scope)
         check(jsonEvents.receive() == StartArray) { "Expected result to start with StartArray" }
         while (true) { // Loop through result array
             val nextValue = jsonEvents.nextValue(asyncParser) ?: break
@@ -650,7 +634,7 @@ class ClientImpl(
             val asyncParser = objectMapper.createNonBlockingByteArrayParser()
 
             /** Execute the request and get the response as a Flow of [JsonEvent] **/
-            val jsonEvents = request.retrieveAndInjectRequestId().toJsonEvents(asyncParser).produceIn(this)
+            val jsonEvents = request.retrieveAndInjectRequestId(headerHandlers).toJsonEvents(asyncParser).produceIn(this)
 
             // Response should be a Json object
             val firstEvent = jsonEvents.receive()
@@ -711,7 +695,7 @@ class ClientImpl(
             val asyncParser = objectMapper.createNonBlockingByteArrayParser()
 
             /** Execute the request and get the response as a Flow of [JsonEvent] **/
-            val jsonEvents = request.retrieveAndInjectRequestId().toJsonEvents(asyncParser).produceIn(this)
+            val jsonEvents = request.retrieveAndInjectRequestId(headerHandlers).toJsonEvents(asyncParser).produceIn(this)
 
             // Response should be a Json object
             val firstEvent = jsonEvents.receive()
@@ -915,7 +899,7 @@ class ClientImpl(
         )
 
         // Get the response as a Flow of CharBuffers (needed to split by line)
-        val responseText = changesRequest.retrieveAndInjectRequestId().toTextFlow()
+        val responseText = changesRequest.retrieveAndInjectRequestId(headerHandlers).toTextFlow()
         // Split by line
         val splitByLine = responseText.split('\n')
         // Convert to json events
@@ -992,10 +976,6 @@ class ClientImpl(
         return query.ignoreNotFound && NOT_FOUND_ERROR == error
     }
 
-    fun Request.retrieveAndInjectRequestId() = this.retrieve().onHeader("x-couch-request-id") {
-        Mono.empty<Unit>().contextWrite { ctx -> ctx.put("X-Couch-Request-ID", it) }
-    }
-
     @Deprecated("Use overload with TypeReference instead to avoid loss of Generic information in lists")
     private suspend fun <T> Request.getCouchDbResponse(
         clazz: Class<T>,
@@ -1016,15 +996,14 @@ class ClientImpl(
         nullIf404: Boolean = false
     ): T? {
         return try {
-            toFlow()
-                .toObject(type, objectMapper, emptyResponseAsNull)
+            toFlow().toObject(type, objectMapper, emptyResponseAsNull)
         } catch (ex: CouchDbException) {
             if (ex.statusCode == 404 && nullIf404) null else throw ex
         }
     }
 
     private fun Request.toFlow() = this
-        .retrieveAndInjectRequestId()
+        .retrieveAndInjectRequestId(headerHandlers)
         .onStatus(SC_UNAUTHORIZED) { response ->
             throw CouchDbException(
                 "Unauthorized",
@@ -1056,6 +1035,12 @@ class ClientImpl(
 
     private suspend inline fun <reified T> Request.getCouchDbResponse(nullIf404: Boolean = false): T? =
         getCouchDbResponse(object: TypeReference<T>() {}, null is T, nullIf404)
+}
 
+@ExperimentalCoroutinesApi
+private fun Request.retrieveAndInjectRequestId(headerHandlers: Map<String, suspend (value: String) -> Unit>) = this.retrieve().let {
+    headerHandlers.entries.fold(it) { resp, (header, handler) ->
+        resp.onHeader(header) { value -> mono { handler(value) } }
+    }
 }
 
