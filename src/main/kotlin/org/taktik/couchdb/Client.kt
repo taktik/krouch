@@ -125,6 +125,15 @@ private data class DeleteRequest(
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class BulkUpdateResult(val id: String, val rev: String?, val ok: Boolean?, val error: String?, val reason: String?)
 data class DocIdentifier(val id: String?, val rev: String?)
+@JsonInclude(JsonInclude.Include.NON_NULL)
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class ReplicatorResponse(
+        val ok: Boolean,
+        val id: String? = null,
+        val rev: String? = null,
+        val error: String? = null,
+        val reason: String? = null
+)
 
 // Convenience inline methods with reified type params
 inline fun <reified K, reified U, reified T> Client.queryViewIncludeDocs(query: ViewQuery): Flow<ViewRowWithDoc<K, U, T>> {
@@ -249,6 +258,11 @@ interface Client {
     suspend fun create(q: Int?, n: Int?, requestId: String? = null): Boolean
     suspend fun security(security: Security): Boolean
     suspend fun designDocumentsIds(): Set<String>
+    suspend fun schedulerDocs(): Scheduler.Docs
+    suspend fun schedulerJobs(): Scheduler.Jobs
+    suspend fun replicate(command: ReplicateCommand): ReplicatorResponse
+    suspend fun cancelReplication(docId : String): ReplicatorResponse
+    suspend fun getCouchDBVersion(): String
 }
 
 private const val NOT_FOUND_ERROR = "not_found"
@@ -874,6 +888,81 @@ class ClientImpl(
             .append("_active_tasks")
         val request = newRequest(uri)
         return getCouchDbResponse(request)!!
+    }
+
+    override suspend fun schedulerDocs(): Scheduler.Docs {
+        val uri = (dbURI.takeIf { it.path.isEmpty() || it.path == "/" } ?: java.net.URI.create(
+                dbURI.toString().removeSuffix(dbURI.path)
+        )).append("_scheduler/docs")
+
+        val request = newRequest(uri)
+
+        return getCouchDbResponse(request) ?: Scheduler.Docs(0,0, listOf())
+    }
+
+    override suspend fun schedulerJobs(): Scheduler.Jobs {
+        val uri = (dbURI.takeIf { it.path.isEmpty() || it.path == "/" } ?: java.net.URI.create(
+                dbURI.toString().removeSuffix(dbURI.path)
+        )).append("_scheduler/jobs")
+
+        val request = newRequest(uri)
+
+        return getCouchDbResponse(request) ?: Scheduler.Jobs(0,0, listOf())
+    }
+
+    override suspend fun replicate(command: ReplicateCommand): ReplicatorResponse {
+        val uri = (dbURI.takeIf { it.path.isEmpty() || it.path == "/" } ?: java.net.URI.create(
+                dbURI.toString().removeSuffix(dbURI.path)
+        )).append("_replicator")
+
+        @Suppress("BlockingMethodInNonBlockingContext")
+        val serializedCmd = objectMapper.writeValueAsString(command)
+        val request = newRequest(uri, HttpMethod.POST)
+                .header("Content-type", "application/json")
+                .body(serializedCmd)
+
+        return getCouchDbResponse(request)
+                ?: ReplicatorResponse(ok = false, error = "404", reason = "replicate command returns null", id = command.id)
+    }
+
+    override suspend fun cancelReplication(docId: String): ReplicatorResponse {
+        val uri = (dbURI.takeIf { it.path.isEmpty() || it.path == "/" } ?: java.net.URI.create(
+                dbURI.toString().removeSuffix(dbURI.path)
+        ))
+                .append("_replicator/")
+                .append(docId)
+
+        return getReplicatorDoc(docId)?.run {
+            val request = newRequest(uri, HttpMethod.DELETE)
+                    .header("If-Match", rev!!)
+
+            getCouchDbResponse(request)
+                    ?: ReplicatorResponse(ok = false, error = "404", reason = "cancel command returns null", id = docId)
+        } ?: ReplicatorResponse(ok = false, error = "Document not found", reason = "document with id $docId doesn't exist", id = docId)
+    }
+
+    private suspend fun getReplicatorDoc(docId: String): ReplicatorDocument? {
+        val uri = (dbURI.takeIf { it.path.isEmpty() || it.path == "/" } ?: java.net.URI.create(
+                dbURI.toString().removeSuffix(dbURI.path)
+        ))
+                .append("_replicator/")
+                .append(docId)
+
+        val request = newRequest(uri)
+
+        return getCouchDbResponse(request)
+    }
+
+    override suspend fun getCouchDBVersion(): String {
+        val uri = (dbURI.takeIf { it.path.isEmpty() || it.path == "/" } ?: java.net.URI.create(
+                dbURI.toString().removeSuffix(dbURI.path)
+        ))
+
+        val request = newRequest(uri)
+
+        val response = request.getCouchDbResponse<Map<String,*>?>(true)
+
+        return response?.get("version").toString()
     }
 
     private suspend inline fun <reified T> getCouchDbResponse(request: Request): T? {

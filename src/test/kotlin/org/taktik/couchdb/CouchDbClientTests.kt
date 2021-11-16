@@ -47,6 +47,7 @@ import io.icure.asyncjacksonhttpclient.parser.StartObject
 import io.icure.asyncjacksonhttpclient.parser.split
 import io.icure.asyncjacksonhttpclient.parser.toJsonEvents
 import io.icure.asyncjacksonhttpclient.netty.NettyWebClient
+import org.taktik.couchdb.entity.ReplicateCommand
 import java.net.URI
 import java.net.URL
 import java.nio.ByteBuffer
@@ -324,5 +325,50 @@ class CouchDbClientTests {
         val codes = testDAO.findCodeByTypeAndVersion("test", "test").map { it.doc }.toList()
         val fetched = client.get<Code>(codes.map { it.id }).toList()
         assertEquals(codes.map { it.code }, fetched.map { it.code })
+    }
+
+     @Test
+    fun testReplicateCommands() = runBlocking {
+        if (client.getCouchDBVersion() >= "3.2.0") {
+            val transientCmd = ReplicateCommand.transient(
+                    sourceUrl = URI("${databaseHost}/${databaseName}"),
+                    sourceUsername = userName,
+                    sourcePassword = password,
+                    targetUrl = URI("${databaseHost}/${databaseName}_transient"),
+                    targetUsername = userName,
+                    targetPassword = password,
+                    createTarget = true,
+                    id = "${databaseName}_transient"
+            )
+
+            val continuousCmd = ReplicateCommand.continuous(
+                    sourceUrl = URI("${databaseHost}/${databaseName}"),
+                    sourceUsername = userName,
+                    sourcePassword = password,
+                    targetUrl = URI("${databaseHost}/${databaseName}_continuous"),
+                    targetUsername = userName,
+                    targetPassword = password,
+                    createTarget = true,
+                    id = "${databaseName}_continuous"
+            )
+            val transientResponse = client.replicate(transientCmd)
+            assertTrue(transientResponse.ok)
+
+            val continuousResponse = client.replicate(continuousCmd)
+            assertTrue(continuousResponse.ok)
+
+            val schedulerDocsResponse = client.schedulerDocs()
+            assertTrue(schedulerDocsResponse.docs.size >= 2)
+
+            val schedulerJobsResponse = client.schedulerJobs()
+            assertTrue(schedulerJobsResponse.jobs.isNotEmpty())
+
+            schedulerDocsResponse.docs
+                    .filter { it.docId == transientCmd.id || it.docId == continuousCmd.id }
+                    .forEach {
+                        val cancelResponse = client.cancelReplication(it.docId!!)
+                        assertTrue(cancelResponse.ok)
+                    }
+        }
     }
 }
