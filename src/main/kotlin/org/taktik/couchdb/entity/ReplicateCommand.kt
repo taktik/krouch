@@ -69,7 +69,7 @@ data class ReplicateCommand(
                 selector = null
         )
 
-        fun transient(
+        fun oneTime(
                 sourceUrl: URI,
                 sourceUsername: String,
                 sourcePassword: String,

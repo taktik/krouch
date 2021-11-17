@@ -330,7 +330,7 @@ class CouchDbClientTests {
      @Test
     fun testReplicateCommands() = runBlocking {
         if (client.getCouchDBVersion() >= "3.2.0") {
-            val transientCmd = ReplicateCommand.transient(
+            val transientCmd = ReplicateCommand.oneTime(
                     sourceUrl = URI("${databaseHost}/${databaseName}"),
                     sourceUsername = userName,
                     sourcePassword = password,
