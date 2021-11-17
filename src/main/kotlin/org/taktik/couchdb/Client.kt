@@ -261,7 +261,7 @@ interface Client {
     suspend fun schedulerDocs(): Scheduler.Docs
     suspend fun schedulerJobs(): Scheduler.Jobs
     suspend fun replicate(command: ReplicateCommand): ReplicatorResponse
-    suspend fun cancelReplication(docId : String): ReplicatorResponse
+    suspend fun deleteReplication(docId : String): ReplicatorResponse
     suspend fun getCouchDBVersion(): String
 }
 
@@ -925,28 +925,41 @@ class ClientImpl(
                 ?: ReplicatorResponse(ok = false, error = "404", reason = "replicate command returns null", id = command.id)
     }
 
-    override suspend fun cancelReplication(docId: String): ReplicatorResponse {
+    override suspend fun deleteReplication(docId: String): ReplicatorResponse {
         val uri = (dbURI.takeIf { it.path.isEmpty() || it.path == "/" } ?: java.net.URI.create(
                 dbURI.toString().removeSuffix(dbURI.path)
         ))
                 .append("_replicator/")
-                .append(docId)
+                .append("_purge")
 
-        return getReplicatorDoc(docId)?.run {
-            val request = newRequest(uri, HttpMethod.DELETE)
-                    .header("If-Match", rev!!)
+        return getReplicatorRevisions(docId)?.run {
+            val revisionList = revsInfo?.map { it["rev"]!! }
+            val body = mapOf(id to revisionList)
+            @Suppress("BlockingMethodInNonBlockingContext")
+            val serializedBody = objectMapper.writeValueAsString(body)
+            val request = newRequest(uri, HttpMethod.POST)
+                    .header("Content-Type", "application/json")
+                    .body(serializedBody)
 
-            getCouchDbResponse(request)
-                    ?: ReplicatorResponse(ok = false, error = "404", reason = "cancel command returns null", id = docId)
+            val response = request.getCouchDbResponse<Map<String,*>?>(true)
+            response?.get("purged")?.let {
+                val purged = it as Map<*,*>
+                if (purged.keys.contains(docId)) {
+                    ReplicatorResponse(ok = true, id = docId)
+                } else {
+                    ReplicatorResponse(ok = false, error = "Purge failure", reason = "Id doesn't exist in purged list", id = docId)
+                }
+            } ?: ReplicatorResponse(ok = false, error = "404", reason = "delete command returns null", id = docId)
         } ?: ReplicatorResponse(ok = false, error = "Document not found", reason = "document with id $docId doesn't exist", id = docId)
     }
 
-    private suspend fun getReplicatorDoc(docId: String): ReplicatorDocument? {
+    private suspend fun getReplicatorRevisions(docId: String): ReplicatorDocument? {
         val uri = (dbURI.takeIf { it.path.isEmpty() || it.path == "/" } ?: java.net.URI.create(
                 dbURI.toString().removeSuffix(dbURI.path)
         ))
                 .append("_replicator/")
                 .append(docId)
+                .param("revs_info", "true")
 
         val request = newRequest(uri)
 

@@ -33,6 +33,7 @@ import java.time.ZonedDateTime
 data class ReplicatorDocument(
         @JsonProperty("_id") override val id: String,
         @JsonProperty("_rev") override val rev: String?,
+        @JsonProperty("_revs_info") val revsInfo: List<Map<String,String>>?,
         val source: ReplicateCommand.Remote? = null,
         val target: ReplicateCommand.Remote? = null,
         val owner: String? = null,

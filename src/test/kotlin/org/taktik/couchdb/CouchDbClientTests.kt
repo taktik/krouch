@@ -330,15 +330,15 @@ class CouchDbClientTests {
      @Test
     fun testReplicateCommands() = runBlocking {
         if (client.getCouchDBVersion() >= "3.2.0") {
-            val transientCmd = ReplicateCommand.oneTime(
+            val oneTimeCmd = ReplicateCommand.oneTime(
                     sourceUrl = URI("${databaseHost}/${databaseName}"),
                     sourceUsername = userName,
                     sourcePassword = password,
-                    targetUrl = URI("${databaseHost}/${databaseName}_transient"),
+                    targetUrl = URI("${databaseHost}/${databaseName}_one_time"),
                     targetUsername = userName,
                     targetPassword = password,
                     createTarget = true,
-                    id = "${databaseName}_transient"
+                    id = "${databaseName}_one_time"
             )
 
             val continuousCmd = ReplicateCommand.continuous(
@@ -351,7 +351,7 @@ class CouchDbClientTests {
                     createTarget = true,
                     id = "${databaseName}_continuous"
             )
-            val transientResponse = client.replicate(transientCmd)
+            val transientResponse = client.replicate(oneTimeCmd)
             assertTrue(transientResponse.ok)
 
             val continuousResponse = client.replicate(continuousCmd)
@@ -364,9 +364,9 @@ class CouchDbClientTests {
             assertTrue(schedulerJobsResponse.jobs.isNotEmpty())
 
             schedulerDocsResponse.docs
-                    .filter { it.docId == transientCmd.id || it.docId == continuousCmd.id }
+                    .filter { it.docId == oneTimeCmd.id || it.docId == continuousCmd.id }
                     .forEach {
-                        val cancelResponse = client.cancelReplication(it.docId!!)
+                        val cancelResponse = client.deleteReplication(it.docId!!)
                         assertTrue(cancelResponse.ok)
                     }
         }
