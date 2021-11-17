@@ -911,6 +911,12 @@ class ClientImpl(
     }
 
     override suspend fun replicate(command: ReplicateCommand): ReplicatorResponse {
+        if (!checkReplicatorDB()) return ReplicatorResponse(
+                ok = false,
+                error = "Replicator DB not found",
+                reason = "Cannot fetch replicator DB or cannot create it",
+                id = command.id)
+
         val uri = (dbURI.takeIf { it.path.isEmpty() || it.path == "/" } ?: java.net.URI.create(
                 dbURI.toString().removeSuffix(dbURI.path)
         )).append("_replicator")
@@ -941,8 +947,7 @@ class ClientImpl(
                     .header("Content-Type", "application/json")
                     .body(serializedBody)
 
-            val response = request.getCouchDbResponse<Map<String,*>?>(true)
-            response?.get("purged")?.let {
+            request.getCouchDbResponse<Map<String,*>?>(true)?.get("purged")?.let {
                 val purged = it as Map<*,*>
                 if (purged.keys.contains(docId)) {
                     ReplicatorResponse(ok = true, id = docId)
@@ -964,6 +969,21 @@ class ClientImpl(
         val request = newRequest(uri)
 
         return getCouchDbResponse(request)
+    }
+
+    private suspend fun checkReplicatorDB(): Boolean {
+        val uri = (dbURI.takeIf { it.path.isEmpty() || it.path == "/" } ?: java.net.URI.create(
+                dbURI.toString().removeSuffix(dbURI.path)
+        ))
+                .append("_replicator")
+
+        val request = newRequest(uri)
+
+        return request.getCouchDbResponse<Map<String,*>?>(true)?.run { true }
+                ?: kotlin.run {
+                    val createRequest = newRequest(uri, HttpMethod.PUT)
+                    createRequest.getCouchDbResponse<Map<String,*>?>(true)?.run { get("ok") == true } ?: false
+                }
     }
 
     override suspend fun getCouchDBVersion(): String {
