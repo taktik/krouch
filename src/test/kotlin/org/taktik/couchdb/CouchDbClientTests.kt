@@ -351,8 +351,8 @@ class CouchDbClientTests {
                     createTarget = true,
                     id = "${databaseName}_continuous"
             )
-            val transientResponse = client.replicate(oneTimeCmd)
-            assertTrue(transientResponse.ok)
+            val oneTimeResponse = client.replicate(oneTimeCmd)
+            assertTrue(oneTimeResponse.ok)
 
             val continuousResponse = client.replicate(continuousCmd)
             assertTrue(continuousResponse.ok)
