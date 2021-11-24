@@ -21,9 +21,11 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize
+import com.fasterxml.jackson.databind.annotation.JsonSerialize
 import com.github.pozo.KotlinBuilder
 import org.taktik.couchdb.CouchDbDocument
 import org.taktik.couchdb.handlers.ZonedDateTimeDeserializer
+import org.taktik.couchdb.handlers.ZonedDateTimeSerializer
 import java.io.Serializable
 import java.time.ZonedDateTime
 
@@ -42,6 +44,7 @@ data class ReplicatorDocument(
         val doc_ids: List<String>? = null,
         @JsonProperty("_replication_state") val replicationState: String? = null,
         @JsonProperty("_replication_state_time")
+        @JsonSerialize(using = ZonedDateTimeSerializer::class)
         @JsonDeserialize(using = ZonedDateTimeDeserializer::class)
         val replicationStateTime: ZonedDateTime? = null,
         @JsonProperty("_replication_stats") val replicationStats: ReplicationStats? = null,
@@ -62,6 +65,7 @@ data class ReplicationStats(
         @JsonProperty("doc_write_failures") val docWriteFailures: Int? = null,
         @JsonProperty("checkpointed_source_seq") val checkpointedSourceSeq: String? = null,
         @JsonProperty("start_time")
+        @JsonSerialize(using = ZonedDateTimeSerializer::class)
         @JsonDeserialize(using = ZonedDateTimeDeserializer::class)
         val startTime: ZonedDateTime? = null,
 ) : Serializable
