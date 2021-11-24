@@ -39,8 +39,8 @@ data class ReplicatorDocument(
         val source: ReplicateCommand.Remote? = null,
         val target: ReplicateCommand.Remote? = null,
         val owner: String? = null,
-        val create_target: Boolean = false,
-        val continuous: Boolean = false,
+        val create_target: Boolean? = null,
+        val continuous: Boolean? = null,
         val doc_ids: List<String>? = null,
         @JsonProperty("_replication_state") val replicationState: String? = null,
         @JsonProperty("_replication_state_time")
