@@ -48,7 +48,8 @@ data class ReplicatorDocument(
         @JsonDeserialize(using = ZonedDateTimeDeserializer::class)
         val replicationStateTime: ZonedDateTime? = null,
         @JsonProperty("_replication_stats") val replicationStats: ReplicationStats? = null,
-        @JsonProperty("rev_history") override val revHistory: Map<String, String>? = null
+        @JsonProperty("rev_history") override val revHistory: Map<String, String>? = null,
+        @JsonProperty("error_count") val errorCount: Int? = null
 ) : CouchDbDocument {
     override fun withIdRev(id: String?, rev: String) = id?.let { this.copy(id = it, rev = rev) } ?: this.copy(rev = rev)
 }
@@ -68,4 +69,5 @@ data class ReplicationStats(
         @JsonSerialize(using = ZonedDateTimeSerializer::class)
         @JsonDeserialize(using = ZonedDateTimeDeserializer::class)
         val startTime: ZonedDateTime? = null,
+        val error: String? = null
 ) : Serializable
