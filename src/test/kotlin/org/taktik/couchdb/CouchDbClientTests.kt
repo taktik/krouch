@@ -337,7 +337,6 @@ class CouchDbClientTests {
                     targetUrl = URI("${databaseHost}/${databaseName}_one_time"),
                     targetUsername = userName,
                     targetPassword = password,
-                    createTarget = true,
                     id = "${databaseName}_one_time"
             )
 
@@ -348,7 +347,6 @@ class CouchDbClientTests {
                     targetUrl = URI("${databaseHost}/${databaseName}_continuous"),
                     targetUsername = userName,
                     targetPassword = password,
-                    createTarget = true,
                     id = "${databaseName}_continuous"
             )
             val oneTimeResponse = client.replicate(oneTimeCmd)

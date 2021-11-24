@@ -51,7 +51,6 @@ data class ReplicateCommand(
                 targetUrl: URI,
                 targetUsername: String,
                 targetPassword: String,
-                createTarget: Boolean = false,
                 id: String? = null
         ) : ReplicateCommand = from (
                 sourceUrl,
@@ -60,7 +59,7 @@ data class ReplicateCommand(
                 targetUrl,
                 targetUsername,
                 targetPassword,
-                createTarget,
+                createTarget = true,
                 continuous = true,
                 cancel = null,
                 id = id,
@@ -76,7 +75,6 @@ data class ReplicateCommand(
                 targetUrl: URI,
                 targetUsername: String,
                 targetPassword: String,
-                createTarget: Boolean = false,
                 id: String? = null
         ) : ReplicateCommand = from (
                 sourceUrl,
@@ -85,7 +83,7 @@ data class ReplicateCommand(
                 targetUrl,
                 targetUsername,
                 targetPassword,
-                createTarget,
+                createTarget = true,
                 continuous = false,
                 cancel = null,
                 id = id,
@@ -102,8 +100,8 @@ data class ReplicateCommand(
                 targetUrl: URI,
                 targetUsername: String,
                 targetPassword: String,
-                createTarget: Boolean?,
-                continuous: Boolean?,
+                createTarget: Boolean,
+                continuous: Boolean,
                 cancel: Boolean?,
                 id: String?,
                 docIds: List<String>?,
@@ -128,8 +126,8 @@ data class ReplicateCommand(
                                     )
                             )
                     ),
-                    createTarget = createTarget ?: false,
-                    continuous = continuous ?: false,
+                    createTarget = createTarget,
+                    continuous = continuous,
                     cancel = cancel,
                     id = id,
                     docIds = docIds,
