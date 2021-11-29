@@ -125,6 +125,15 @@ private data class DeleteRequest(
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class BulkUpdateResult(val id: String, val rev: String?, val ok: Boolean?, val error: String?, val reason: String?)
 data class DocIdentifier(val id: String?, val rev: String?)
+@JsonInclude(JsonInclude.Include.NON_NULL)
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class ReplicatorResponse(
+        val ok: Boolean,
+        val id: String? = null,
+        val rev: String? = null,
+        val error: String? = null,
+        val reason: String? = null
+)
 
 // Convenience inline methods with reified type params
 inline fun <reified K, reified U, reified T> Client.queryViewIncludeDocs(query: ViewQuery): Flow<ViewRowWithDoc<K, U, T>> {
@@ -249,6 +258,11 @@ interface Client {
     suspend fun create(q: Int?, n: Int?, requestId: String? = null): Boolean
     suspend fun security(security: Security): Boolean
     suspend fun designDocumentsIds(): Set<String>
+    suspend fun schedulerDocs(): Scheduler.Docs
+    suspend fun schedulerJobs(): Scheduler.Jobs
+    suspend fun replicate(command: ReplicateCommand): ReplicatorResponse
+    suspend fun deleteReplication(docId : String): ReplicatorResponse
+    suspend fun getCouchDBVersion(): String
 }
 
 private const val NOT_FOUND_ERROR = "not_found"
@@ -874,6 +888,114 @@ class ClientImpl(
             .append("_active_tasks")
         val request = newRequest(uri)
         return getCouchDbResponse(request)!!
+    }
+
+    override suspend fun schedulerDocs(): Scheduler.Docs {
+        val uri = (dbURI.takeIf { it.path.isEmpty() || it.path == "/" } ?: java.net.URI.create(
+                dbURI.toString().removeSuffix(dbURI.path)
+        )).append("_scheduler/docs")
+
+        val request = newRequest(uri)
+
+        return getCouchDbResponse(request) ?: Scheduler.Docs(0,0, listOf())
+    }
+
+    override suspend fun schedulerJobs(): Scheduler.Jobs {
+        val uri = (dbURI.takeIf { it.path.isEmpty() || it.path == "/" } ?: java.net.URI.create(
+                dbURI.toString().removeSuffix(dbURI.path)
+        )).append("_scheduler/jobs")
+
+        val request = newRequest(uri)
+
+        return getCouchDbResponse(request) ?: Scheduler.Jobs(0,0, listOf())
+    }
+
+    override suspend fun replicate(command: ReplicateCommand): ReplicatorResponse {
+        if (!checkReplicatorDB()) return ReplicatorResponse(
+                ok = false,
+                error = "Replicator DB not found",
+                reason = "Cannot fetch replicator DB or cannot create it",
+                id = command.id)
+
+        val uri = (dbURI.takeIf { it.path.isEmpty() || it.path == "/" } ?: java.net.URI.create(
+                dbURI.toString().removeSuffix(dbURI.path)
+        )).append("_replicator")
+
+        @Suppress("BlockingMethodInNonBlockingContext")
+        val serializedCmd = objectMapper.writeValueAsString(command)
+        val request = newRequest(uri, HttpMethod.POST)
+                .header("Content-type", "application/json")
+                .body(serializedCmd)
+
+        return getCouchDbResponse(request)
+                ?: ReplicatorResponse(ok = false, error = "404", reason = "replicate command returns null", id = command.id)
+    }
+
+    override suspend fun deleteReplication(docId: String): ReplicatorResponse {
+        val uri = (dbURI.takeIf { it.path.isEmpty() || it.path == "/" } ?: java.net.URI.create(
+                dbURI.toString().removeSuffix(dbURI.path)
+        ))
+                .append("_replicator/")
+                .append("_purge")
+
+        return getReplicatorRevisions(docId)?.run {
+            val revisionList = revsInfo?.map { it["rev"]!! }
+            val body = mapOf(id to revisionList)
+            @Suppress("BlockingMethodInNonBlockingContext")
+            val serializedBody = objectMapper.writeValueAsString(body)
+            val request = newRequest(uri, HttpMethod.POST)
+                    .header("Content-Type", "application/json")
+                    .body(serializedBody)
+
+            request.getCouchDbResponse<Map<String,*>?>(true)?.get("purged")?.let {
+                val purged = it as Map<*,*>
+                if (purged.keys.contains(docId)) {
+                    ReplicatorResponse(ok = true, id = docId)
+                } else {
+                    ReplicatorResponse(ok = false, error = "Purge failure", reason = "Id doesn't exist in purged list", id = docId)
+                }
+            } ?: ReplicatorResponse(ok = false, error = "404", reason = "delete command returns null", id = docId)
+        } ?: ReplicatorResponse(ok = false, error = "Document not found", reason = "document with id $docId doesn't exist", id = docId)
+    }
+
+    private suspend fun getReplicatorRevisions(docId: String): ReplicatorDocument? {
+        val uri = (dbURI.takeIf { it.path.isEmpty() || it.path == "/" } ?: java.net.URI.create(
+                dbURI.toString().removeSuffix(dbURI.path)
+        ))
+                .append("_replicator/")
+                .append(docId)
+                .param("revs_info", "true")
+
+        val request = newRequest(uri)
+
+        return getCouchDbResponse(request)
+    }
+
+    private suspend fun checkReplicatorDB(): Boolean {
+        val uri = (dbURI.takeIf { it.path.isEmpty() || it.path == "/" } ?: java.net.URI.create(
+                dbURI.toString().removeSuffix(dbURI.path)
+        ))
+                .append("_replicator")
+
+        val request = newRequest(uri)
+
+        return request.getCouchDbResponse<Map<String,*>?>(true)?.run { true }
+                ?: kotlin.run {
+                    val createRequest = newRequest(uri, HttpMethod.PUT)
+                    createRequest.getCouchDbResponse<Map<String,*>?>(true)?.run { get("ok") == true } ?: false
+                }
+    }
+
+    override suspend fun getCouchDBVersion(): String {
+        val uri = (dbURI.takeIf { it.path.isEmpty() || it.path == "/" } ?: java.net.URI.create(
+                dbURI.toString().removeSuffix(dbURI.path)
+        ))
+
+        val request = newRequest(uri)
+
+        val response = request.getCouchDbResponse<Map<String,*>?>(true)
+
+        return response?.get("version").toString()
     }
 
     private suspend inline fun <reified T> getCouchDbResponse(request: Request): T? {
