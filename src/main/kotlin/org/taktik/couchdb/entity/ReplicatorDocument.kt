@@ -48,7 +48,7 @@ data class ReplicatorDocument(
         val replicationStateTime: ZonedDateTime? = null,
         @JsonProperty("_replication_stats") val replicationStats: ReplicationStats? = null,
         @JsonProperty("error_count") val errorCount: Int? = null,
-        @JsonProperty("_revs_info") val revsInfo: List<Map<String,String>>?,
+        @JsonProperty("_revs_info") val revsInfo: List<Map<String,String>>? = null,
         @JsonProperty("rev_history") override val revHistory: Map<String, String>? = null,
 ) : CouchDbDocument {
     override fun withIdRev(id: String?, rev: String) = id?.let { this.copy(id = it, rev = rev) } ?: this.copy(rev = rev)
