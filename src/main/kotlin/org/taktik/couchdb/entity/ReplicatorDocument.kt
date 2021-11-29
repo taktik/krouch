@@ -35,7 +35,6 @@ import java.time.ZonedDateTime
 data class ReplicatorDocument(
         @JsonProperty("_id") override val id: String,
         @JsonProperty("_rev") override val rev: String?,
-        @JsonProperty("_revs_info") val revsInfo: List<Map<String,String>>?,
         val source: ReplicateCommand.Remote? = null,
         val target: ReplicateCommand.Remote? = null,
         val owner: String? = null,
@@ -48,8 +47,9 @@ data class ReplicatorDocument(
         @JsonDeserialize(using = ZonedDateTimeDeserializer::class)
         val replicationStateTime: ZonedDateTime? = null,
         @JsonProperty("_replication_stats") val replicationStats: ReplicationStats? = null,
+        @JsonProperty("error_count") val errorCount: Int? = null,
+        @JsonProperty("_revs_info") val revsInfo: List<Map<String,String>>?,
         @JsonProperty("rev_history") override val revHistory: Map<String, String>? = null,
-        @JsonProperty("error_count") val errorCount: Int? = null
 ) : CouchDbDocument {
     override fun withIdRev(id: String?, rev: String) = id?.let { this.copy(id = it, rev = rev) } ?: this.copy(rev = rev)
 }
