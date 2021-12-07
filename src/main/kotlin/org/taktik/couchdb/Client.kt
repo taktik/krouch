@@ -1132,11 +1132,11 @@ class ClientImpl(
         .retrieveAndInjectRequestId(headerHandlers)
         .onStatus(SC_UNAUTHORIZED) { response ->
             throw CouchDbException(
-                "Unauthorized",
+                "Unauthorized Access",
                 response.statusCode,
                 response.responseBodyAsString(),
-                response.headers.find { it.key == "X-Couch-Request-ID" }?.value,
-                response.headers.find { it.key == "X-Couch-Body-Time" }?.value
+                couchDbRequestId = response.headers.find { it.key == "X-Couch-Request-ID" }?.value,
+                couchDbBodyTime = response.headers.find { it.key == "X-Couchdb-Body-Time" }?.value?.toLong()
             )
         }
         .onStatus(SC_NOT_FOUND) { response ->
@@ -1144,8 +1144,8 @@ class ClientImpl(
                 "Not found",
                 response.statusCode,
                 response.responseBodyAsString(),
-                response.headers.find { it.key == "X-Couch-Request-ID" }?.value,
-                response.headers.find { it.key == "X-Couch-Body-Time" }?.value
+                couchDbRequestId = response.headers.find { it.key == "X-Couch-Request-ID" }?.value,
+                couchDbBodyTime = response.headers.find { it.key == "X-Couchdb-Body-Time" }?.value?.toLong()
             )
         }
         .onStatus(SC_CONFLICT) { response ->
@@ -1153,8 +1153,8 @@ class ClientImpl(
                 "Conflict",
                 response.statusCode,
                 response.responseBodyAsString(),
-                response.headers.find { it.key == "X-Couch-Request-ID" }?.value,
-                response.headers.find { it.key == "X-Couch-Body-Time" }?.value
+                couchDbRequestId = response.headers.find { it.key == "X-Couch-Request-ID" }?.value,
+                couchDbBodyTime = response.headers.find { it.key == "X-Couchdb-Body-Time" }?.value?.toLong()
             )
         }
         .toFlow()
