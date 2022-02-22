@@ -19,6 +19,13 @@ package org.taktik.couchdb
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.KotlinModule
+import io.icure.asyncjacksonhttpclient.net.web.HttpMethod
+import io.icure.asyncjacksonhttpclient.netty.NettyWebClient
+import io.icure.asyncjacksonhttpclient.parser.EndArray
+import io.icure.asyncjacksonhttpclient.parser.StartArray
+import io.icure.asyncjacksonhttpclient.parser.StartObject
+import io.icure.asyncjacksonhttpclient.parser.split
+import io.icure.asyncjacksonhttpclient.parser.toJsonEvents
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.async
@@ -38,22 +45,16 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.taktik.couchdb.dao.CodeDAO
-import io.icure.asyncjacksonhttpclient.net.web.HttpMethod
+import org.taktik.couchdb.entity.ReplicateCommand
+import org.taktik.couchdb.entity.User
 import org.taktik.couchdb.entity.ViewQuery
 import org.taktik.couchdb.exception.CouchDbConflictException
-import io.icure.asyncjacksonhttpclient.parser.EndArray
-import io.icure.asyncjacksonhttpclient.parser.StartArray
-import io.icure.asyncjacksonhttpclient.parser.StartObject
-import io.icure.asyncjacksonhttpclient.parser.split
-import io.icure.asyncjacksonhttpclient.parser.toJsonEvents
-import io.icure.asyncjacksonhttpclient.netty.NettyWebClient
-import org.taktik.couchdb.entity.ReplicateCommand
 import java.net.URI
 import java.net.URL
 import java.nio.ByteBuffer
 import java.nio.CharBuffer
 import java.nio.charset.StandardCharsets
-import java.util.UUID
+import java.util.*
 
 @FlowPreview
 @ExperimentalCoroutinesApi
@@ -81,8 +82,9 @@ class CouchDbClientTests {
             if(!client.exists()){
                 client.create(8, 2)
             }
-
-            testDAO.createOrUpdateDesignDocument()
+            try {
+                testDAO.createOrUpdateDesignDocument()
+            } catch (e: Exception) {}
         }
     }
 
@@ -93,13 +95,31 @@ class CouchDbClientTests {
             client.subscribeForChanges<Code>("java_type", { if (it == "Code") Code::class.java else null }).take(testSize).toList()
         }
         // Wait a bit before updating DB
-        delay(3000)
         val codes = List(testSize) { Code.from("test", UUID.randomUUID().toString(), "test") }
-        val createdCodes = client.bulkUpdate(codes).toList()
+        val createdCodes = codes.map {
+            delay(3000)
+            client.update(it)
+        }
         val changes = deferredChanges.await()
         assertEquals(createdCodes.size, changes.size)
         assertEquals(createdCodes.map { it.id }.toSet(), changes.map { it.id }.toSet())
         assertEquals(codes.map { it.code }.toSet(), changes.map { it.doc.code }.toSet())
+    }
+
+    @Test
+    fun testSubscribeUserChanges() = runBlocking {
+        val testSize = 100
+        val deferredChanges = async {
+            client.subscribeForChanges<org.taktik.couchdb.User>("java_type", {
+                if (it == "org.taktik.icure.entities.User") {
+                    org.taktik.couchdb.User::class.java
+                } else null
+            }, "0").map { it.also {
+                println("${it.doc.id}:${it.doc.login}")
+            } }.take(testSize).toList()
+        }
+        val changes = deferredChanges.await()
+        assertTrue(changes.isNotEmpty())
     }
 
     @Test

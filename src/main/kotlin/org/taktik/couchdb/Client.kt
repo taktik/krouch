@@ -1068,7 +1068,10 @@ class ClientImpl(
                         }
                         // Parse as actual Change object with the correct class
                         buffer.asParser(objectMapper).readValueAs<Change<T>>(typeRef)
-                    } catch(e:JsonMappingException) { null }
+                    } catch(e:JsonMappingException) {
+                        log.debug("Unmarshalling error while deserialising change oc class $className", e)
+                        null
+                    }
                     @Suppress("BlockingMethodInNonBlockingContext")
                     value?.let { emit(it) }
                 }
