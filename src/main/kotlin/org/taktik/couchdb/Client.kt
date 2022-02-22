@@ -860,6 +860,7 @@ class ClientImpl(
         var lastSeq = since
         var delayMillis = initialBackOffDelay
         var changesFlow = internalSubscribeForChanges(clazz, lastSeq, classDiscriminator, classProvider)
+
         while (true) {
             try {
                 changesFlow.collect { change ->
@@ -872,11 +873,13 @@ class ClientImpl(
                     throw e
                 }
                 log.warn("Error while listening for changes. Will try to re-subscribe in ${delayMillis}ms", e)
-                // Attempt to re-subscribe indefinitely, with an exponential backoff
-                delay(delayMillis)
-                changesFlow = internalSubscribeForChanges(clazz, lastSeq, classDiscriminator, classProvider)
-                delayMillis = (delayMillis * backOffFactor).coerceAtMost(maxDelay)
             }
+            // Attempt to re-subscribe indefinitely, with an exponential backoff
+            delay(delayMillis)
+
+            log.warn("Resubscribing")
+            changesFlow = internalSubscribeForChanges(clazz, lastSeq, classDiscriminator, classProvider)
+            delayMillis = (delayMillis * backOffFactor).coerceAtMost(maxDelay)
         }
     }
 
@@ -1141,7 +1144,7 @@ class ClientImpl(
         }
         .onStatus(SC_NOT_FOUND) { response ->
             throw CouchDbException(
-                "Not found",
+                "Document not found",
                 response.statusCode,
                 response.responseBodyAsString(),
                 couchDbRequestId = response.headers.find { it.key == "X-Couch-Request-ID" }?.value,
@@ -1150,7 +1153,7 @@ class ClientImpl(
         }
         .onStatus(SC_CONFLICT) { response ->
             throw CouchDbConflictException(
-                "Conflict",
+                "Document update Conflict",
                 response.statusCode,
                 response.responseBodyAsString(),
                 couchDbRequestId = response.headers.find { it.key == "X-Couch-Request-ID" }?.value,

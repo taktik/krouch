@@ -86,7 +86,8 @@ dependencies {
     api("com.github.pozo:mapstruct-kotlin:1.3.1.2")
     kapt("com.github.pozo:mapstruct-kotlin-processor:1.3.1.2")
 
-    implementation(group = "io.icure", name = "async-jackson-http-client", version = "0.1.14-9e79365c38")
+    implementation(group = "io.icure", name = "async-jackson-http-client", version = "0.1.15-9cf193799d")
+
     implementation(group = "com.fasterxml.jackson.core", name = "jackson-databind", version = "2.12.5")
     implementation(group = "com.fasterxml.jackson.module", name = "jackson-module-kotlin", version = "2.12.5")
 
@@ -99,6 +100,7 @@ dependencies {
     // Logging
     implementation(group = "ch.qos.logback", name = "logback-classic", version = "1.2.6")
     implementation(group = "ch.qos.logback", name = "logback-access", version = "1.2.6")
+
     implementation(group = "org.slf4j", name = "slf4j-api", version = "1.7.32")
     implementation(group = "org.slf4j", name = "jul-to-slf4j", version = "1.7.32")
     implementation(group = "org.slf4j", name = "jcl-over-slf4j", version = "1.7.32")
@@ -106,6 +108,7 @@ dependencies {
 
     implementation(group = "com.google.guava", name = "guava", version = "30.1.1-jre")
     implementation(group = "org.apache.httpcomponents", name = "httpclient", version = "4.5.13")
+
     implementation(group = "io.projectreactor", name = "reactor-core", version = "3.4.10")
     implementation(group = "io.projectreactor.netty", name = "reactor-netty", version = "1.0.11")
 
