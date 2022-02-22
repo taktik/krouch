@@ -21,6 +21,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.core.type.TypeReference
+import com.fasterxml.jackson.databind.JsonMappingException
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.exc.InvalidFormatException
 import com.fasterxml.jackson.databind.util.TokenBuffer
@@ -862,21 +863,18 @@ class ClientImpl(
         var changesFlow = internalSubscribeForChanges(clazz, lastSeq, classDiscriminator, classProvider)
 
         while (true) {
-            try {
-                changesFlow.collect { change ->
+            changesFlow
+                .catch { e ->
+                    log.warn("Error detected while listening for changes", e)
+                }
+                .collect { change ->
                     lastSeq = change.seq
                     delayMillis = initialBackOffDelay
                     emit(change)
                 }
-            } catch (e: Exception) {
-                if (e is CancellationException) {
-                    throw e
-                }
-                log.warn("Error while listening for changes. Will try to re-subscribe in ${delayMillis}ms", e)
-            }
             // Attempt to re-subscribe indefinitely, with an exponential backoff
+            log.warn("Error while listening for changes. Will try to re-subscribe in ${delayMillis}ms")
             delay(delayMillis)
-
             log.warn("Resubscribing")
             changesFlow = internalSubscribeForChanges(clazz, lastSeq, classDiscriminator, classProvider)
             delayMillis = (delayMillis * backOffFactor).coerceAtMost(maxDelay)
@@ -1060,16 +1058,19 @@ class ClientImpl(
             if (className != null) {
                 val changeClass = classProvider(className)
                 if (changeClass != null && clazz.isAssignableFrom(changeClass)) {
-                    val changeType =
-                        object : TypeToken<Change<T>>() {}.where(object : TypeParameter<T>() {}, changeClass).type
-                    val typeRef = object : TypeReference<Change<T>>() {
-                        override fun getType(): Type {
-                            return changeType
+                    val value = try {
+                        val changeType =
+                            object : TypeToken<Change<T>>() {}.where(object : TypeParameter<T>() {}, changeClass).type
+                        val typeRef = object : TypeReference<Change<T>>() {
+                            override fun getType(): Type {
+                                return changeType
+                            }
                         }
-                    }
-                    // Parse as actual Change object with the correct class
+                        // Parse as actual Change object with the correct class
+                        buffer.asParser(objectMapper).readValueAs<Change<T>>(typeRef)
+                    } catch(e:JsonMappingException) { null }
                     @Suppress("BlockingMethodInNonBlockingContext")
-                    emit(buffer.asParser(objectMapper).readValueAs(typeRef))
+                    value?.let { emit(it) }
                 }
             }
         }
