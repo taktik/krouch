@@ -873,9 +873,9 @@ class ClientImpl(
                     emit(change)
                 }
             // Attempt to re-subscribe indefinitely, with an exponential backoff
-            log.warn("Error while listening for changes. Will try to re-subscribe in ${delayMillis}ms")
+            log.warn("Error while listening for changes on ${dbURI}. Will try to re-subscribe in ${delayMillis}ms")
             delay(delayMillis)
-            log.warn("Resubscribing")
+            log.warn("Resubscribing to $dbURI")
             changesFlow = internalSubscribeForChanges(clazz, lastSeq, classDiscriminator, classProvider)
             delayMillis = (delayMillis * backOffFactor).coerceAtMost(maxDelay)
         }
