@@ -19,6 +19,7 @@ package org.taktik.couchdb
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.KotlinModule
+import com.fasterxml.jackson.module.kotlin.readValue
 import io.icure.asyncjacksonhttpclient.net.web.HttpMethod
 import io.icure.asyncjacksonhttpclient.netty.NettyWebClient
 import io.icure.asyncjacksonhttpclient.parser.EndArray
@@ -45,10 +46,9 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.taktik.couchdb.dao.CodeDAO
-import org.taktik.couchdb.entity.ReplicateCommand
-import org.taktik.couchdb.entity.User
-import org.taktik.couchdb.entity.ViewQuery
+import org.taktik.couchdb.entity.*
 import org.taktik.couchdb.exception.CouchDbConflictException
+import java.io.File
 import java.net.URI
 import java.net.URL
 import java.nio.ByteBuffer
@@ -347,7 +347,7 @@ class CouchDbClientTests {
         assertEquals(codes.map { it.code }, fetched.map { it.code })
     }
 
-     @Test
+    @Test
     fun testReplicateCommands() = runBlocking {
         if (client.getCouchDBVersion() >= "3.2.0") {
             val oneTimeCmd = ReplicateCommand.oneTime(
@@ -388,5 +388,19 @@ class CouchDbClientTests {
                         assertTrue(cancelResponse.ok)
                     }
         }
+    }
+
+    @Test
+    fun testActiveTasksInstanceMapper() = runBlocking {
+        val activeTasksSample = File(javaClass.classLoader.getResource("active_tasks_sample.json")!!.file)
+                .readText()
+                .replace("\n".toRegex(), "")
+        val kotlinMapper = ObjectMapper().also { it.registerModule(KotlinModule()) }
+        val activeTasks: List<ActiveTask> = kotlinMapper.readValue(activeTasksSample)
+
+        assertTrue(activeTasks[0] is Indexer)
+        assertTrue(activeTasks[1] is ViewCompactionTask)
+        assertTrue(activeTasks[2] is DatabaseCompactionTask)
+        assertTrue(activeTasks[4] is ReplicationTask)
     }
 }
