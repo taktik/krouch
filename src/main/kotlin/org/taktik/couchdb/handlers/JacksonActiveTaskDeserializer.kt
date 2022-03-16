@@ -21,17 +21,14 @@ import com.fasterxml.jackson.core.JsonParser
 import com.fasterxml.jackson.core.ObjectCodec
 import com.fasterxml.jackson.databind.DeserializationContext
 import com.fasterxml.jackson.databind.JsonNode
-import org.taktik.couchdb.entity.ActiveTask
-import org.taktik.couchdb.entity.DatabaseCompactionTask
-import org.taktik.couchdb.entity.Indexer
-import org.taktik.couchdb.entity.ViewCompactionTask
+import org.taktik.couchdb.entity.*
 import org.taktik.couchdb.jackson.JsonObjectDeserializer
 
 class JacksonActiveTaskDeserializer : JsonObjectDeserializer<ActiveTask>() {
     private val discriminator = "type"
     private val subclasses = mapOf(
             "indexer" to Indexer::class.java,
-            "replication" to Indexer::class.java,
+            "replication" to ReplicationTask::class.java,
             "database_compaction" to DatabaseCompactionTask::class.java,
             "view_compaction" to ViewCompactionTask::class.java
     )
