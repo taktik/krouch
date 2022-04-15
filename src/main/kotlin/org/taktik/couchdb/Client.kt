@@ -1036,13 +1036,11 @@ class ClientImpl(
         // Get the response as a Flow of CharBuffers (needed to split by line)
         val responseText = changesRequest.retrieveAndInjectRequestId(headerHandlers).toTextFlow()
         // Split by line
-        val splitByLine = responseText.split('\n')
+        val splitByLine = responseText.split('\n') { heartBeatCallback() }
         // Convert to json events
         val jsonEvents = splitByLine.map { ev ->
             ev.map {
                 charset.encode(it)
-            }.mapNotNull { bb ->
-              bb.takeIf { it.hasRemaining() }.also { if (it == null) { heartBeatCallback() } }
             }.toJsonEvents(asyncParser)
         }
         // Parse as generic Change Object
