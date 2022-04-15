@@ -252,7 +252,8 @@ interface Client {
         since: String = "now",
         initialBackOffDelay: Long = 100,
         backOffFactor: Int = 2,
-        maxDelay: Long = 10000
+        maxDelay: Long = 10000,
+        heartBeatCallback: () -> Unit = {}
     ): Flow<Change<T>>
 
     suspend fun activeTasks(): List<ActiveTask>
@@ -731,8 +732,7 @@ class ClientImpl(
                                 // We iterate over the rows until we encounter the EndArray event
                                 rowsLoop@ while (true) { // Loop through "rows" array
                                     when (jsonEvents.receive()) {
-                                        StartObject -> {
-                                        } // Start of a new row
+                                        StartObject -> {} // Start of a new row
                                         EndArray -> break@rowsLoop  // End of rows array
                                         else -> error("Expected Start of new row or end of row array")
                                     }
@@ -856,11 +856,12 @@ class ClientImpl(
         since: String,
         initialBackOffDelay: Long,
         backOffFactor: Int,
-        maxDelay: Long
+        maxDelay: Long,
+        heartBeatCallback: () -> Unit
     ): Flow<Change<T>> = flow {
         var lastSeq = since
         var delayMillis = initialBackOffDelay
-        var changesFlow = internalSubscribeForChanges(clazz, lastSeq, classDiscriminator, classProvider)
+        var changesFlow = internalSubscribeForChanges(clazz, lastSeq, classDiscriminator, classProvider, heartBeatCallback)
 
         while (true) {
             changesFlow
@@ -876,7 +877,13 @@ class ClientImpl(
             log.warn("Error while listening for changes on ${dbURI}. Will try to re-subscribe in ${delayMillis}ms")
             delay(delayMillis)
             log.warn("Resubscribing to $dbURI")
-            changesFlow = internalSubscribeForChanges(clazz, lastSeq, classDiscriminator, classProvider)
+            changesFlow = internalSubscribeForChanges(
+                clazz,
+                lastSeq,
+                classDiscriminator,
+                classProvider,
+                heartBeatCallback
+            )
             delayMillis = (delayMillis * backOffFactor).coerceAtMost(maxDelay)
         }
     }
@@ -1010,7 +1017,8 @@ class ClientImpl(
         clazz: Class<T>,
         since: String,
         classDiscriminator: String,
-        classProvider: (String) -> Class<T>?
+        classProvider: (String) -> Class<T>?,
+        heartBeatCallback: () -> Unit
     ): Flow<Change<T>> = flow {
         val charset = Charset.forName("UTF-8")
 
@@ -1033,6 +1041,8 @@ class ClientImpl(
         val jsonEvents = splitByLine.map { ev ->
             ev.map {
                 charset.encode(it)
+            }.mapNotNull { bb ->
+              bb.takeIf { it.hasRemaining() }.also { if (it == null) { heartBeatCallback() } }
             }.toJsonEvents(asyncParser)
         }
         // Parse as generic Change Object
