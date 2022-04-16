@@ -59,7 +59,6 @@ import java.util.*
 @FlowPreview
 @ExperimentalCoroutinesApi
 class CouchDbClientTests {
-
     private val databaseHost =  System.getProperty("krouch.test.couchdb.server.url", "http://localhost:5984")
     private val databaseName =  System.getProperty("krouch.test.couchdb.database.name", "krouch-test")
     private val userName = System.getProperty("krouch.test.couchdb.username", "admin")
@@ -233,6 +232,18 @@ class CouchDbClientTests {
         val nonExistingId = UUID.randomUUID().toString()
         val code = client.get<Code>(nonExistingId)
         assertNull(code)
+    }
+
+    @Test
+    fun testClientGetDbsInfo() = runBlocking {
+        val dbs = client.databaseInfos(client.allDatabases()).toList()
+        assertTrue(dbs.isNotEmpty())
+    }
+
+    @Test
+    fun testClientAllDatabases() = runBlocking {
+        val dbs = client.allDatabases().toList()
+        assertTrue(dbs.isNotEmpty())
     }
 
     @Test

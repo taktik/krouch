@@ -49,6 +49,7 @@ import org.taktik.couchdb.exception.CouchDbException
 import org.taktik.couchdb.exception.ViewResultException
 import org.taktik.couchdb.mango.MangoQuery
 import org.taktik.couchdb.mango.MangoResultException
+import org.taktik.couchdb.util.bufferedChunks
 import java.lang.reflect.Type
 import java.nio.ByteBuffer
 import java.nio.charset.Charset
@@ -265,6 +266,8 @@ interface Client {
     suspend fun replicate(command: ReplicateCommand): ReplicatorResponse
     suspend fun deleteReplication(docId : String): ReplicatorResponse
     suspend fun getCouchDBVersion(): String
+    fun databaseInfos(ids: Flow<String>): Flow<DatabaseInfoWrapper>
+    fun allDatabases(): Flow<String>
 }
 
 private const val NOT_FOUND_ERROR = "not_found"
@@ -896,6 +899,44 @@ class ClientImpl(
             .append("_active_tasks")
         val request = newRequest(uri)
         return getCouchDbResponse(request)!!
+    }
+
+    override fun databaseInfos(ids: Flow<String>): Flow<DatabaseInfoWrapper> = flow {
+        val asyncParser = objectMapper.createNonBlockingByteArrayParser()
+        val uri = (dbURI.takeIf { it.path.isEmpty() || it.path == "/" } ?: java.net.URI.create(
+            dbURI.toString().removeSuffix(dbURI.path)
+        )).append("_dbs_info")
+
+        coroutineScope {
+            ids.bufferedChunks(20, 100).collect { dbIds ->
+                val request = newRequest(uri, objectMapper.writeValueAsString(mapOf("keys" to dbIds)), HttpMethod.POST)
+                val jsonEvents = request.retrieveAndInjectRequestId(headerHandlers).toJsonEvents(asyncParser).produceIn(this)
+                val firstEvent = jsonEvents.receive()
+                check(firstEvent == StartArray) { "Expected data to start with an Array" }
+                while (jsonEvents.nextValue(asyncParser)?.let {
+                        emit(it.asParser(objectMapper).readValueAs(DatabaseInfoWrapper::class.java))
+                    } != null) { // Loop through doc objects
+                }
+            }
+        }
+    }
+
+    override fun allDatabases(): Flow<String> = flow {
+        val asyncParser = objectMapper.createNonBlockingByteArrayParser()
+        val uri = (dbURI.takeIf { it.path.isEmpty() || it.path == "/" } ?: java.net.URI.create(
+            dbURI.toString().removeSuffix(dbURI.path)
+        )).append("_all_dbs")
+
+        coroutineScope {
+                val request = newRequest(uri)
+                val jsonEvents = request.retrieveAndInjectRequestId(headerHandlers).toJsonEvents(asyncParser).produceIn(this)
+                val firstEvent = jsonEvents.receive()
+                check(firstEvent == StartArray) { "Expected data to start with an Array" }
+                while (jsonEvents.nextValue(asyncParser)?.let {
+                        emit(it.asParser(objectMapper).nextTextValue())
+                    } != null) { // Loop through doc objects
+                }
+        }
     }
 
     override suspend fun schedulerDocs(): Scheduler.Docs {
