@@ -552,7 +552,7 @@ class ClientImpl(
     }
 
     // CouchDB Response body for Create/Update/Delete
-    private data class CUDResponse(val id: String, val rev: String, val ok: Boolean)
+    private data class CUDResponse(val id: String?, val rev: String?, val ok: Boolean?, val error: String?, val reason: String?)
 
     @Suppress("UNCHECKED_CAST")
     override suspend fun <T : CouchDbDocument> create(entity: T, clazz: Class<T>, requestId: String?): T {
@@ -563,11 +563,18 @@ class ClientImpl(
         val request = newRequest(uri, serializedDoc, requestId = requestId)
 
         val createResponse = request.getCouchDbResponse<CUDResponse>()!!.also {
-            check(it.ok)
+            validate(it)
         }
         // Create a new copy of the doc and set rev/id from response
         @Suppress("BlockingMethodInNonBlockingContext")
-        return entity.withIdRev(createResponse.id, createResponse.rev) as T
+        return entity.withIdRev(createResponse.id, createResponse.rev!!) as T
+    }
+
+    private fun validate(response: CUDResponse) {
+        response.error?.let { throw java.lang.IllegalStateException("${it}: ${response.reason ?: "-"}") }
+        check(response.ok ?: false)
+        checkNotNull(response.id)
+        checkNotNull(response.rev)
     }
 
     @Suppress("UNCHECKED_CAST")
@@ -581,11 +588,11 @@ class ClientImpl(
         val request = newRequest(updateURI, serializedDoc, HttpMethod.PUT, requestId)
 
         val updateResponse = request.getCouchDbResponse<CUDResponse>()!!.also {
-            check(it.ok)
+            validate(it)
         }
         // Create a new copy of the doc and set rev/id from response
         @Suppress("BlockingMethodInNonBlockingContext")
-        return entity.withIdRev(updateResponse.id, updateResponse.rev) as T
+        return entity.withIdRev(updateResponse.id, updateResponse.rev!!) as T
     }
 
     override suspend fun <T : CouchDbDocument> delete(entity: T, requestId: String?): DocIdentifier {
@@ -597,7 +604,7 @@ class ClientImpl(
         val request = newRequest(uri, HttpMethod.DELETE, requestId = requestId)
 
         return request.getCouchDbResponse<CUDResponse>()!!.also {
-            check(it.ok)
+            validate(it)
         }.let { DocIdentifier(it.id, it.rev) }
     }
 
