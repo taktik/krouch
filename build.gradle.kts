@@ -97,14 +97,8 @@ dependencies {
     implementation(group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-reactor", version = "1.4.3")
     implementation(group = "org.jetbrains.kotlinx", name = "kotlinx-collections-immutable-jvm", version = "0.3.4")
 
-    // Logging
-    implementation(group = "ch.qos.logback", name = "logback-classic", version = "1.2.6")
-    implementation(group = "ch.qos.logback", name = "logback-access", version = "1.2.6")
 
     implementation(group = "org.slf4j", name = "slf4j-api", version = "1.7.32")
-    implementation(group = "org.slf4j", name = "jul-to-slf4j", version = "1.7.32")
-    implementation(group = "org.slf4j", name = "jcl-over-slf4j", version = "1.7.32")
-    implementation(group = "org.slf4j", name = "log4j-over-slf4j", version = "1.7.32")
 
     implementation(group = "com.google.guava", name = "guava", version = "30.1.1-jre")
     implementation(group = "org.apache.httpcomponents", name = "httpclient", version = "4.5.13")
@@ -112,6 +106,14 @@ dependencies {
     implementation(group = "io.projectreactor", name = "reactor-core", version = "3.4.10")
     implementation(group = "io.projectreactor.netty", name = "reactor-netty", version = "1.0.11")
 
+    // Logging
+    testImplementation(group = "org.slf4j", name = "jul-to-slf4j", version = "1.7.32")
+    testImplementation(group = "org.slf4j", name = "jcl-over-slf4j", version = "1.7.32")
+    testImplementation(group = "org.slf4j", name = "log4j-over-slf4j", version = "1.7.32")
+    testImplementation(group = "ch.qos.logback", name = "logback-classic", version = "1.2.6")
+    testImplementation(group = "ch.qos.logback", name = "logback-access", version = "1.2.6")
+
+    testImplementation(group = "io.projectreactor", name = "reactor-tools", version = "3.4.10")
     testImplementation(group = "org.junit.jupiter", name = "junit-jupiter", version = "5.8.0")
 }
 

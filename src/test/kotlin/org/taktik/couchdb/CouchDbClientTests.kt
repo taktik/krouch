@@ -33,6 +33,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.fold
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
@@ -45,9 +46,11 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.platform.commons.logging.LoggerFactory
 import org.taktik.couchdb.dao.CodeDAO
 import org.taktik.couchdb.entity.*
 import org.taktik.couchdb.exception.CouchDbConflictException
+import reactor.tools.agent.ReactorDebugAgent
 import java.io.File
 import java.net.URI
 import java.net.URL
@@ -59,6 +62,8 @@ import java.util.*
 @FlowPreview
 @ExperimentalCoroutinesApi
 class CouchDbClientTests {
+    private val log = org.slf4j.LoggerFactory.getLogger(this::class.java)
+
     private val databaseHost =  System.getProperty("krouch.test.couchdb.server.url", "http://localhost:5984")
     private val databaseName =  System.getProperty("krouch.test.couchdb.database.name", "krouch-test")
     private val userName = System.getProperty("krouch.test.couchdb.username", "admin")
@@ -73,6 +78,10 @@ class CouchDbClientTests {
             password)
 
     private val testDAO = CodeDAO(client)
+
+    init {
+        ReactorDebugAgent.init()
+    }
 
     @BeforeEach
     fun setupDatabase() {
@@ -90,13 +99,18 @@ class CouchDbClientTests {
     @Test
     fun testSubscribeChanges() = runBlocking {
         val testSize = 10
+        var testsDone = 0
         val deferredChanges = async {
-            client.subscribeForChanges<Code>("java_type", { if (it == "Code") Code::class.java else null }).take(testSize).toList()
+            client.subscribeForChanges<Code>("java_type", {
+                if (it == "Code") Code::class.java else null
+            }).onEach {
+                log.warn("Read code ${++testsDone}/$testSize")
+            }.take(testSize).toList()
         }
         // Wait a bit before updating DB
         val codes = List(testSize) { Code.from("test", UUID.randomUUID().toString(), "test") }
         val createdCodes = codes.map {
-            delay(3000)
+            delay(300)
             client.update(it)
         }
         val changes = deferredChanges.await()
@@ -106,12 +120,36 @@ class CouchDbClientTests {
     }
 
     @Test
+    fun testSubscribeChangesHeartbeat() = runBlocking {
+        val testSize = 1
+        var testsDone = 0
+        val deferredChanges = async {
+            client.subscribeForChanges<Code>("java_type", {
+                if (it == "Code") Code::class.java else null
+            }).onEach {
+                log.warn("Read code ${++testsDone}/$testSize")
+            }.take(testSize).toList()
+        }
+        // Wait a bit before updating DB
+        val codes = List(testSize) { Code.from("test", UUID.randomUUID().toString(), "test") }
+        val createdCodes = codes.map {
+            delay(45000)
+            client.update(it)
+        }
+        val changes = deferredChanges.await()
+        assertEquals(createdCodes.size, changes.size)
+        assertEquals(createdCodes.map { it.id }.toSet(), changes.map { it.id }.toSet())
+        assertEquals(codes.map { it.code }.toSet(), changes.map { it.doc.code }.toSet())
+    }
+
+
+    @Test
     fun testSubscribeUserChanges() = runBlocking {
         val testSize = 100
         val deferredChanges = async {
             client.subscribeForChanges<org.taktik.couchdb.User>("java_type", {
                 if (it == "org.taktik.icure.entities.User") {
-                    org.taktik.couchdb.User::class.java
+                    User::class.java
                 } else null
             }, "0").map { it.also {
                 println("${it.doc.id}:${it.doc.login}")

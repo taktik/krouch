@@ -34,16 +34,60 @@ import io.icure.asyncjacksonhttpclient.net.params
 import io.icure.asyncjacksonhttpclient.net.web.HttpMethod
 import io.icure.asyncjacksonhttpclient.net.web.Request
 import io.icure.asyncjacksonhttpclient.net.web.WebClient
-import io.icure.asyncjacksonhttpclient.parser.*
+import io.icure.asyncjacksonhttpclient.parser.EndArray
+import io.icure.asyncjacksonhttpclient.parser.EndObject
+import io.icure.asyncjacksonhttpclient.parser.FieldName
+import io.icure.asyncjacksonhttpclient.parser.JsonEvent
+import io.icure.asyncjacksonhttpclient.parser.NumberValue
+import io.icure.asyncjacksonhttpclient.parser.StartArray
+import io.icure.asyncjacksonhttpclient.parser.StartObject
+import io.icure.asyncjacksonhttpclient.parser.StringValue
+import io.icure.asyncjacksonhttpclient.parser.copyFromJsonEvent
+import io.icure.asyncjacksonhttpclient.parser.nextSingleValueAs
+import io.icure.asyncjacksonhttpclient.parser.nextSingleValueAsOrNull
+import io.icure.asyncjacksonhttpclient.parser.nextValue
+import io.icure.asyncjacksonhttpclient.parser.skipValue
+import io.icure.asyncjacksonhttpclient.parser.split
+import io.icure.asyncjacksonhttpclient.parser.toJsonEvents
 import io.icure.asyncjacksonhttpclient.parser.toObject
 import io.netty.handler.codec.http.HttpHeaderNames
 import kotlinx.collections.immutable.persistentListOf
-import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.FlowCollector
+import kotlinx.coroutines.flow.cancellable
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.fold
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.produceIn
 import kotlinx.coroutines.reactor.mono
-import org.apache.http.HttpStatus.*
+import org.apache.http.HttpStatus.SC_CONFLICT
+import org.apache.http.HttpStatus.SC_NOT_FOUND
+import org.apache.http.HttpStatus.SC_UNAUTHORIZED
 import org.slf4j.LoggerFactory
-import org.taktik.couchdb.entity.*
+import org.taktik.couchdb.entity.ActiveTask
+import org.taktik.couchdb.entity.AttachmentResult
+import org.taktik.couchdb.entity.Change
+import org.taktik.couchdb.entity.DatabaseInfoWrapper
+import org.taktik.couchdb.entity.DesignDocumentResult
+import org.taktik.couchdb.entity.Option
+import org.taktik.couchdb.entity.ReplicateCommand
+import org.taktik.couchdb.entity.ReplicatorDocument
+import org.taktik.couchdb.entity.Scheduler
+import org.taktik.couchdb.entity.Security
+import org.taktik.couchdb.entity.Versionable
+import org.taktik.couchdb.entity.ViewQuery
 import org.taktik.couchdb.exception.CouchDbConflictException
 import org.taktik.couchdb.exception.CouchDbException
 import org.taktik.couchdb.exception.ViewResultException
@@ -54,8 +98,11 @@ import java.lang.reflect.Type
 import java.nio.ByteBuffer
 import java.nio.charset.Charset
 import java.time.Duration
+import java.time.Instant
 import kotlin.math.max
 import kotlin.math.min
+
+class NoHeartbeatException(msg: String) : CancellationException(msg)
 
 typealias CouchDbDocument = Versionable<String>
 
@@ -127,14 +174,15 @@ private data class DeleteRequest(
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class BulkUpdateResult(val id: String, val rev: String?, val ok: Boolean?, val error: String?, val reason: String?)
 data class DocIdentifier(val id: String?, val rev: String?)
+
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class ReplicatorResponse(
-        val ok: Boolean,
-        val id: String? = null,
-        val rev: String? = null,
-        val error: String? = null,
-        val reason: String? = null
+    val ok: Boolean,
+    val id: String? = null,
+    val rev: String? = null,
+    val error: String? = null,
+    val reason: String? = null
 )
 
 // Convenience inline methods with reified type params
@@ -170,7 +218,8 @@ inline fun <reified T> Client.queryMango(query: MangoQuery<T>): Flow<MangoQueryR
     return mangoQuery(query, T::class.java).filterIsInstance()
 }
 
-suspend inline fun <reified T : CouchDbDocument> Client.get(id: String): T? = this.get(id, object: TypeReference<T> () {})
+suspend inline fun <reified T : CouchDbDocument> Client.get(id: String): T? =
+    this.get(id, object : TypeReference<T>() {})
 
 inline fun <reified T : CouchDbDocument> Client.get(ids: List<String>): Flow<T> = this.get(ids, T::class.java)
 
@@ -199,7 +248,6 @@ inline fun <reified T : CouchDbDocument> Client.subscribeForChanges(
         maxDelay
     )
 
-
 interface Client {
     // Check if db exists
     suspend fun exists(): Boolean
@@ -208,15 +256,44 @@ interface Client {
     // CRUD methods
     suspend fun <T : CouchDbDocument> get(id: String, clazz: Class<T>, vararg options: Option): T?
     suspend fun <T : CouchDbDocument> get(id: String, type: TypeReference<T>, vararg options: Option): T?
-    suspend fun <T : CouchDbDocument> get(id: String, type: TypeReference<T>, requestId: String, vararg options: Option): T?
+    suspend fun <T : CouchDbDocument> get(
+        id: String,
+        type: TypeReference<T>,
+        requestId: String,
+        vararg options: Option
+    ): T?
+
     suspend fun <T : CouchDbDocument> get(id: String, rev: String, clazz: Class<T>, vararg options: Option): T?
     suspend fun <T : CouchDbDocument> get(id: String, rev: String, type: TypeReference<T>, vararg options: Option): T?
-    suspend fun <T : CouchDbDocument> get(id: String, rev: String, type: TypeReference<T>, requestId: String, vararg options: Option): T?
+    suspend fun <T : CouchDbDocument> get(
+        id: String,
+        rev: String,
+        type: TypeReference<T>,
+        requestId: String,
+        vararg options: Option
+    ): T?
+
     fun <T : CouchDbDocument> get(ids: Collection<String>, clazz: Class<T>, requestId: String? = null): Flow<T>
     fun <T : CouchDbDocument> get(ids: Flow<String>, clazz: Class<T>, requestId: String? = null): Flow<T>
-    fun <T : CouchDbDocument> getForPagination(ids: Collection<String>, clazz: Class<T>, requestId: String? = null): Flow<ViewQueryResultEvent>
-    fun <T : CouchDbDocument> getForPagination(ids: Flow<String>, clazz: Class<T>, requestId: String? = null): Flow<ViewQueryResultEvent>
-    fun getAttachment(id: String, attachmentId: String, rev: String? = null, requestId: String? = null): Flow<ByteBuffer>
+    fun <T : CouchDbDocument> getForPagination(
+        ids: Collection<String>,
+        clazz: Class<T>,
+        requestId: String? = null
+    ): Flow<ViewQueryResultEvent>
+
+    fun <T : CouchDbDocument> getForPagination(
+        ids: Flow<String>,
+        clazz: Class<T>,
+        requestId: String? = null
+    ): Flow<ViewQueryResultEvent>
+
+    fun getAttachment(
+        id: String,
+        attachmentId: String,
+        rev: String? = null,
+        requestId: String? = null
+    ): Flow<ByteBuffer>
+
     suspend fun createAttachment(
         id: String,
         attachmentId: String,
@@ -229,7 +306,12 @@ interface Client {
     suspend fun deleteAttachment(id: String, attachmentId: String, rev: String, requestId: String? = null): String
     suspend fun <T : CouchDbDocument> create(entity: T, clazz: Class<T>, requestId: String? = null): T
     suspend fun <T : CouchDbDocument> update(entity: T, clazz: Class<T>, requestId: String? = null): T
-    fun <T : CouchDbDocument> bulkUpdate(entities: Collection<T>, clazz: Class<T>, requestId: String? = null): Flow<BulkUpdateResult>
+    fun <T : CouchDbDocument> bulkUpdate(
+        entities: Collection<T>,
+        clazz: Class<T>,
+        requestId: String? = null
+    ): Flow<BulkUpdateResult>
+
     suspend fun <T : CouchDbDocument> delete(entity: T, requestId: String? = null): DocIdentifier
     fun <T : CouchDbDocument> bulkDelete(entities: Collection<T>, requestId: String? = null): Flow<BulkUpdateResult>
 
@@ -264,7 +346,7 @@ interface Client {
     suspend fun schedulerDocs(): Scheduler.Docs
     suspend fun schedulerJobs(): Scheduler.Jobs
     suspend fun replicate(command: ReplicateCommand): ReplicatorResponse
-    suspend fun deleteReplication(docId : String): ReplicatorResponse
+    suspend fun deleteReplication(docId: String): ReplicatorResponse
     suspend fun getCouchDBVersion(): String
     fun databaseInfos(ids: Flow<String>): Flow<DatabaseInfoWrapper>
     fun allDatabases(): Flow<String>
@@ -552,7 +634,13 @@ class ClientImpl(
     }
 
     // CouchDB Response body for Create/Update/Delete
-    private data class CUDResponse(val id: String?, val rev: String?, val ok: Boolean?, val error: String?, val reason: String?)
+    private data class CUDResponse(
+        val id: String?,
+        val rev: String?,
+        val ok: Boolean?,
+        val error: String?,
+        val reason: String?
+    )
 
     @Suppress("UNCHECKED_CAST")
     override suspend fun <T : CouchDbDocument> create(entity: T, clazz: Class<T>, requestId: String?): T {
@@ -664,7 +752,8 @@ class ClientImpl(
             val asyncParser = objectMapper.createNonBlockingByteArrayParser()
 
             /** Execute the request and get the response as a Flow of [JsonEvent] **/
-            val jsonEvents = request.retrieveAndInjectRequestId(headerHandlers).toJsonEvents(asyncParser).produceIn(this)
+            val jsonEvents =
+                request.retrieveAndInjectRequestId(headerHandlers).toJsonEvents(asyncParser).produceIn(this)
 
             // Response should be a Json object
             val firstEvent = jsonEvents.receive()
@@ -725,7 +814,8 @@ class ClientImpl(
             val asyncParser = objectMapper.createNonBlockingByteArrayParser()
 
             /** Execute the request and get the response as a Flow of [JsonEvent] **/
-            val jsonEvents = request.retrieveAndInjectRequestId(headerHandlers).toJsonEvents(asyncParser).produceIn(this)
+            val jsonEvents =
+                request.retrieveAndInjectRequestId(headerHandlers).toJsonEvents(asyncParser).produceIn(this)
 
             // Response should be a Json object
             val firstEvent = jsonEvents.receive()
@@ -868,33 +958,50 @@ class ClientImpl(
         backOffFactor: Int,
         maxDelay: Long,
         heartBeatCallback: () -> Unit
-    ): Flow<Change<T>> = flow {
+    ): Flow<Change<T>> = channelFlow {
         var lastSeq = since
         var delayMillis = initialBackOffDelay
-        var changesFlow = internalSubscribeForChanges(clazz, lastSeq, classDiscriminator, classProvider, heartBeatCallback)
+        var latestHeartbeat = Instant.now().toEpochMilli()
 
         while (true) {
-            changesFlow
-                .catch { e ->
-                    log.warn("Error detected while listening for changes", e)
+            try {
+                val collectDeferred = async(Dispatchers.IO) {
+                    internalSubscribeForChanges(clazz, lastSeq, classDiscriminator, classProvider) {
+                        latestHeartbeat = Instant.now().toEpochMilli()
+                        heartBeatCallback()
+                    }.cancellable().catch { e ->
+                        log.warn("Error detected while listening for changes", e)
+                    }.collect { change ->
+                        lastSeq = change.seq
+                        delayMillis = initialBackOffDelay
+                        send(change)
+                    }
                 }
-                .collect { change ->
-                    lastSeq = change.seq
-                    delayMillis = initialBackOffDelay
-                    emit(change)
+
+                val watcher = async(Dispatchers.IO) {
+                    var guard = true
+                    while (guard) {
+                        delay(32000)
+                        if (latestHeartbeat < Instant.now().toEpochMilli() - 28000) {
+                            guard = false
+                            collectDeferred.cancel(NoHeartbeatException("No Heartbeat for 30 s."))
+                        }
+                    }
                 }
-            // Attempt to re-subscribe indefinitely, with an exponential backoff
-            log.warn("Error while listening for changes on ${dbURI}. Will try to re-subscribe in ${delayMillis}ms")
-            delay(delayMillis)
-            log.warn("Resubscribing to $dbURI")
-            changesFlow = internalSubscribeForChanges(
-                clazz,
-                lastSeq,
-                classDiscriminator,
-                classProvider,
-                heartBeatCallback
-            )
-            delayMillis = (delayMillis * backOffFactor).coerceAtMost(maxDelay)
+
+                collectDeferred.await()
+
+                log.warn("End of connection reached while listening for changes on ${dbURI}. Will try to re-subscribe in ${delayMillis}ms")
+                watcher.cancel()
+                delay(delayMillis)
+                log.warn("Resubscribing to $dbURI")
+
+                // Attempt to re-subscribe indefinitely, with an exponential backoff
+                delayMillis = (delayMillis * backOffFactor).coerceAtMost(maxDelay)
+            } catch (e: NoHeartbeatException) {
+                log.warn("No heartbeat cancellation $e caught while listening for changes on ${dbURI}. Will try to re-subscribe in ${delayMillis}ms")
+                log.warn("Resubscribing to $dbURI")
+            }
         }
     }
 
@@ -917,7 +1024,8 @@ class ClientImpl(
         coroutineScope {
             ids.bufferedChunks(20, 100).collect { dbIds ->
                 val request = newRequest(uri, objectMapper.writeValueAsString(mapOf("keys" to dbIds)), HttpMethod.POST)
-                val jsonEvents = request.retrieveAndInjectRequestId(headerHandlers).toJsonEvents(asyncParser).produceIn(this)
+                val jsonEvents =
+                    request.retrieveAndInjectRequestId(headerHandlers).toJsonEvents(asyncParser).produceIn(this)
                 val firstEvent = jsonEvents.receive()
                 check(firstEvent == StartArray) { "Expected data to start with an Array" }
                 while (jsonEvents.nextValue(asyncParser)?.let {
@@ -935,92 +1043,105 @@ class ClientImpl(
         )).append("_all_dbs")
 
         coroutineScope {
-                val request = newRequest(uri)
-                val jsonEvents = request.retrieveAndInjectRequestId(headerHandlers).toJsonEvents(asyncParser).produceIn(this)
-                val firstEvent = jsonEvents.receive()
-                check(firstEvent == StartArray) { "Expected data to start with an Array" }
-                while (jsonEvents.nextValue(asyncParser)?.let {
-                        emit(it.asParser(objectMapper).nextTextValue())
-                    } != null) { // Loop through doc objects
-                }
+            val request = newRequest(uri)
+            val jsonEvents =
+                request.retrieveAndInjectRequestId(headerHandlers).toJsonEvents(asyncParser).produceIn(this)
+            val firstEvent = jsonEvents.receive()
+            check(firstEvent == StartArray) { "Expected data to start with an Array" }
+            while (jsonEvents.nextValue(asyncParser)?.let {
+                    emit(it.asParser(objectMapper).nextTextValue())
+                } != null) { // Loop through doc objects
+            }
         }
     }
 
     override suspend fun schedulerDocs(): Scheduler.Docs {
         val uri = (dbURI.takeIf { it.path.isEmpty() || it.path == "/" } ?: java.net.URI.create(
-                dbURI.toString().removeSuffix(dbURI.path)
+            dbURI.toString().removeSuffix(dbURI.path)
         )).append("_scheduler/docs")
 
         val request = newRequest(uri)
 
-        return getCouchDbResponse(request) ?: Scheduler.Docs(0,0, listOf())
+        return getCouchDbResponse(request) ?: Scheduler.Docs(0, 0, listOf())
     }
 
     override suspend fun schedulerJobs(): Scheduler.Jobs {
         val uri = (dbURI.takeIf { it.path.isEmpty() || it.path == "/" } ?: java.net.URI.create(
-                dbURI.toString().removeSuffix(dbURI.path)
+            dbURI.toString().removeSuffix(dbURI.path)
         )).append("_scheduler/jobs")
 
         val request = newRequest(uri)
 
-        return getCouchDbResponse(request) ?: Scheduler.Jobs(0,0, listOf())
+        return getCouchDbResponse(request) ?: Scheduler.Jobs(0, 0, listOf())
     }
 
     override suspend fun replicate(command: ReplicateCommand): ReplicatorResponse {
         if (!checkReplicatorDB()) return ReplicatorResponse(
-                ok = false,
-                error = "Replicator DB not found",
-                reason = "Cannot fetch replicator DB or cannot create it",
-                id = command.id)
+            ok = false,
+            error = "Replicator DB not found",
+            reason = "Cannot fetch replicator DB or cannot create it",
+            id = command.id
+        )
 
         val uri = (dbURI.takeIf { it.path.isEmpty() || it.path == "/" } ?: java.net.URI.create(
-                dbURI.toString().removeSuffix(dbURI.path)
+            dbURI.toString().removeSuffix(dbURI.path)
         )).append("_replicator")
 
         @Suppress("BlockingMethodInNonBlockingContext")
         val serializedCmd = objectMapper.writeValueAsString(command)
         val request = newRequest(uri, HttpMethod.POST)
-                .header("Content-type", "application/json")
-                .body(serializedCmd)
+            .header("Content-type", "application/json")
+            .body(serializedCmd)
 
         return getCouchDbResponse(request)
-                ?: ReplicatorResponse(ok = false, error = "404", reason = "replicate command returns null", id = command.id)
+            ?: ReplicatorResponse(ok = false, error = "404", reason = "replicate command returns null", id = command.id)
     }
 
     override suspend fun deleteReplication(docId: String): ReplicatorResponse {
         val uri = (dbURI.takeIf { it.path.isEmpty() || it.path == "/" } ?: java.net.URI.create(
-                dbURI.toString().removeSuffix(dbURI.path)
+            dbURI.toString().removeSuffix(dbURI.path)
         ))
-                .append("_replicator/")
-                .append("_purge")
+            .append("_replicator/")
+            .append("_purge")
 
         return getReplicatorRevisions(docId)?.run {
             val revisionList = revsInfo?.map { it["rev"]!! }
             val body = mapOf(id to revisionList)
+
             @Suppress("BlockingMethodInNonBlockingContext")
             val serializedBody = objectMapper.writeValueAsString(body)
             val request = newRequest(uri, HttpMethod.POST)
-                    .header("Content-Type", "application/json")
-                    .body(serializedBody)
+                .header("Content-Type", "application/json")
+                .body(serializedBody)
 
-            request.getCouchDbResponse<Map<String,*>?>(true)?.get("purged")?.let {
-                val purged = it as Map<*,*>
+            request.getCouchDbResponse<Map<String, *>?>(true)?.get("purged")?.let {
+                val purged = it as Map<*, *>
                 if (purged.keys.contains(docId)) {
                     ReplicatorResponse(ok = true, id = docId)
                 } else {
-                    ReplicatorResponse(ok = false, error = "Purge failure", reason = "Id doesn't exist in purged list", id = docId)
+                    ReplicatorResponse(
+                        ok = false,
+                        error = "Purge failure",
+                        reason = "Id doesn't exist in purged list",
+                        id = docId
+                    )
                 }
             } ?: ReplicatorResponse(ok = false, error = "404", reason = "delete command returns null", id = docId)
-        } ?: ReplicatorResponse(ok = false, error = "Document not found", reason = "document with id $docId doesn't exist", id = docId)
+        } ?: ReplicatorResponse(
+            ok = false,
+            error = "Document not found",
+            reason = "document with id $docId doesn't exist",
+            id = docId
+        )
     }
 
     private suspend fun getReplicatorRevisions(docId: String): ReplicatorDocument? {
         val uri = (dbURI.takeIf { it.path.isEmpty() || it.path == "/" } ?: java.net.URI.create(
-                dbURI.toString().removeSuffix(dbURI.path)
+            dbURI.toString().removeSuffix(dbURI.path)
         ))
-                .append("_replicator/")
-                .append(docId)
-                .param("revs_info", "true")
+            .append("_replicator/")
+            .append(docId)
+            .param("revs_info", "true")
 
         val request = newRequest(uri)
 
@@ -1029,33 +1150,33 @@ class ClientImpl(
 
     private suspend fun checkReplicatorDB(): Boolean {
         val uri = (dbURI.takeIf { it.path.isEmpty() || it.path == "/" } ?: java.net.URI.create(
-                dbURI.toString().removeSuffix(dbURI.path)
+            dbURI.toString().removeSuffix(dbURI.path)
         ))
-                .append("_replicator")
+            .append("_replicator")
 
         val request = newRequest(uri)
 
-        return request.getCouchDbResponse<Map<String,*>?>(true)?.run { true }
-                ?: kotlin.run {
-                    val createRequest = newRequest(uri, HttpMethod.PUT)
-                    createRequest.getCouchDbResponse<Map<String,*>?>(true)?.run { get("ok") == true } ?: false
-                }
+        return request.getCouchDbResponse<Map<String, *>?>(true)?.run { true }
+            ?: kotlin.run {
+                val createRequest = newRequest(uri, HttpMethod.PUT)
+                createRequest.getCouchDbResponse<Map<String, *>?>(true)?.run { get("ok") == true } ?: false
+            }
     }
 
     override suspend fun getCouchDBVersion(): String {
         val uri = (dbURI.takeIf { it.path.isEmpty() || it.path == "/" } ?: java.net.URI.create(
-                dbURI.toString().removeSuffix(dbURI.path)
+            dbURI.toString().removeSuffix(dbURI.path)
         ))
 
         val request = newRequest(uri)
 
-        val response = request.getCouchDbResponse<Map<String,*>?>(true)
+        val response = request.getCouchDbResponse<Map<String, *>?>(true)
 
         return response?.get("version").toString()
     }
 
     private suspend inline fun <reified T> getCouchDbResponse(request: Request): T? {
-        return request.getCouchDbResponse(object: TypeReference<T>() {}, nullIf404 = true)
+        return request.getCouchDbResponse(object : TypeReference<T>() {}, nullIf404 = true)
     }
 
     @Suppress("UnstableApiUsage")
@@ -1124,7 +1245,7 @@ class ClientImpl(
                         }
                         // Parse as actual Change object with the correct class
                         buffer.asParser(objectMapper).readValueAs<Change<T>>(typeRef)
-                    } catch(e:JsonMappingException) {
+                    } catch (e: JsonMappingException) {
                         log.debug("Unmarshalling error while deserialising change oc class $className", e)
                         null
                     }
@@ -1223,7 +1344,7 @@ class ClientImpl(
         .toFlow()
 
     private suspend inline fun <reified T> Request.getCouchDbResponse(nullIf404: Boolean = false): T? =
-        getCouchDbResponse(object: TypeReference<T>() {}, null is T, nullIf404)
+        getCouchDbResponse(object : TypeReference<T>() {}, null is T, nullIf404)
 }
 
 @ExperimentalCoroutinesApi
