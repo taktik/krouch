@@ -94,6 +94,7 @@ import org.taktik.couchdb.exception.ViewResultException
 import org.taktik.couchdb.mango.MangoQuery
 import org.taktik.couchdb.mango.MangoResultException
 import org.taktik.couchdb.util.bufferedChunks
+import reactor.core.publisher.Mono
 import java.lang.reflect.Type
 import java.nio.ByteBuffer
 import java.nio.charset.Charset
@@ -377,7 +378,8 @@ class ClientImpl(
     private val username: String,
     private val password: String,
     private val objectMapper: ObjectMapper = ObjectMapper().also { it.registerModule(KotlinModule()) },
-    private val headerHandlers: Map<String, HeaderHandler> = mapOf()
+    private val headerHandlers: Map<String, HeaderHandler> = mapOf(),
+    private val timingHandler: ((Long) -> Mono<Unit>)? = null,
 ) : Client {
     private val log = LoggerFactory.getLogger(javaClass.name)
 
@@ -599,7 +601,7 @@ class ClientImpl(
         val request =
             newRequest(dbURI.append(id).append(attachmentId).let { u -> rev?.let { u.param("rev", it) } ?: u })
 
-        return request.retrieveAndInjectRequestId(headerHandlers).toBytesFlow()
+        return request.retrieveAndInjectRequestId(headerHandlers, timingHandler).toBytesFlow()
     }
 
     override suspend fun deleteAttachment(id: String, attachmentId: String, rev: String, requestId: String?): String {
@@ -731,7 +733,7 @@ class ClientImpl(
 
         @Suppress("BlockingMethodInNonBlockingContext")
         val asyncParser = objectMapper.createNonBlockingByteArrayParser()
-        val jsonEvents = request.retrieveAndInjectRequestId(headerHandlers).toJsonEvents(asyncParser).produceIn(scope)
+        val jsonEvents = request.retrieveAndInjectRequestId(headerHandlers, timingHandler).toJsonEvents(asyncParser).produceIn(scope)
         check(jsonEvents.receive() == StartArray) { "Expected result to start with StartArray" }
         while (true) { // Loop through result array
             val nextValue = jsonEvents.nextValue(asyncParser) ?: break
@@ -753,7 +755,7 @@ class ClientImpl(
 
             /** Execute the request and get the response as a Flow of [JsonEvent] **/
             val jsonEvents =
-                request.retrieveAndInjectRequestId(headerHandlers).toJsonEvents(asyncParser).produceIn(this)
+                request.retrieveAndInjectRequestId(headerHandlers, timingHandler).toJsonEvents(asyncParser).produceIn(this)
 
             // Response should be a Json object
             val firstEvent = jsonEvents.receive()
@@ -815,7 +817,7 @@ class ClientImpl(
 
             /** Execute the request and get the response as a Flow of [JsonEvent] **/
             val jsonEvents =
-                request.retrieveAndInjectRequestId(headerHandlers).toJsonEvents(asyncParser).produceIn(this)
+                request.retrieveAndInjectRequestId(headerHandlers, timingHandler).toJsonEvents(asyncParser).produceIn(this)
 
             // Response should be a Json object
             val firstEvent = jsonEvents.receive()
@@ -991,10 +993,10 @@ class ClientImpl(
 
                 collectDeferred.await()
 
-                log.warn("End of connection reached while listening for changes on ${dbURI}. Will try to re-subscribe in ${delayMillis}ms")
+                log.error("End of connection reached while listening for changes on ${dbURI}. Will try to re-subscribe in ${delayMillis}ms")
                 watcher.cancel()
                 delay(delayMillis)
-                log.warn("Resubscribing to $dbURI")
+                log.error("Resubscribing to $dbURI")
 
                 // Attempt to re-subscribe indefinitely, with an exponential backoff
                 delayMillis = (delayMillis * backOffFactor).coerceAtMost(maxDelay)
@@ -1025,7 +1027,7 @@ class ClientImpl(
             ids.bufferedChunks(20, 100).collect { dbIds ->
                 val request = newRequest(uri, objectMapper.writeValueAsString(mapOf("keys" to dbIds)), HttpMethod.POST)
                 val jsonEvents =
-                    request.retrieveAndInjectRequestId(headerHandlers).toJsonEvents(asyncParser).produceIn(this)
+                    request.retrieveAndInjectRequestId(headerHandlers, timingHandler).toJsonEvents(asyncParser).produceIn(this)
                 val firstEvent = jsonEvents.receive()
                 check(firstEvent == StartArray) { "Expected data to start with an Array" }
                 while (jsonEvents.nextValue(asyncParser)?.let {
@@ -1045,7 +1047,7 @@ class ClientImpl(
         coroutineScope {
             val request = newRequest(uri)
             val jsonEvents =
-                request.retrieveAndInjectRequestId(headerHandlers).toJsonEvents(asyncParser).produceIn(this)
+                request.retrieveAndInjectRequestId(headerHandlers, timingHandler).toJsonEvents(asyncParser).produceIn(this)
             val firstEvent = jsonEvents.receive()
             check(firstEvent == StartArray) { "Expected data to start with an Array" }
             while (jsonEvents.nextValue(asyncParser)?.let {
@@ -1203,7 +1205,7 @@ class ClientImpl(
         )
 
         // Get the response as a Flow of CharBuffers (needed to split by line)
-        val responseText = changesRequest.retrieveAndInjectRequestId(headerHandlers).toTextFlow()
+        val responseText = changesRequest.retrieveAndInjectRequestId(headerHandlers, timingHandler).toTextFlow()
         // Split by line
         val splitByLine = responseText.split('\n') { heartBeatCallback() }
         // Convert to json events
@@ -1246,7 +1248,7 @@ class ClientImpl(
                         // Parse as actual Change object with the correct class
                         buffer.asParser(objectMapper).readValueAs<Change<T>>(typeRef)
                     } catch (e: JsonMappingException) {
-                        log.debug("Unmarshalling error while deserialising change oc class $className", e)
+                        log.debug("$dbURI Unmarshalling error while deserialising change of class $className", e)
                         null
                     }
                     @Suppress("BlockingMethodInNonBlockingContext")
@@ -1313,7 +1315,7 @@ class ClientImpl(
     }
 
     private fun Request.toFlow() = this
-        .retrieveAndInjectRequestId(headerHandlers)
+        .retrieveAndInjectRequestId(headerHandlers, timingHandler)
         .onStatus(SC_UNAUTHORIZED) { response ->
             throw CouchDbException(
                 "Unauthorized Access",
@@ -1348,9 +1350,12 @@ class ClientImpl(
 }
 
 @ExperimentalCoroutinesApi
-private fun Request.retrieveAndInjectRequestId(headerHandlers: Map<String, HeaderHandler>) = this.retrieve().let {
+private fun Request.retrieveAndInjectRequestId(
+    headerHandlers: Map<String, HeaderHandler>,
+    timingHandler: ((Long) -> Mono<Unit>)?
+) = this.retrieve().let {
     headerHandlers.entries.fold(it) { resp, (header, handler) ->
         resp.onHeader(header) { value -> mono { handler.handle(value) } }
-    }
+    }.let{ resp -> timingHandler?.let { resp.withTiming(it) } ?: resp }
 }
 
