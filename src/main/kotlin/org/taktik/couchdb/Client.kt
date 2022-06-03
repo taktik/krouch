@@ -917,7 +917,7 @@ class ClientImpl(
                                             ViewRowNoDoc(it, key, value)
                                         }
                                         emit(row)
-                                    } ?: if (value is Int) {
+                                    } ?: if (value is Int || value is Long) {
                                         emit(ViewRowNoDoc("", key, value))
                                     }
 
